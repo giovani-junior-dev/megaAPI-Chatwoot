@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,38 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPostChatwootMessage_WithAttachment_IncludesFileURL(t *testing.T) {
+	var captured map[string]any
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&captured)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer mock.Close()
+	key := bytes.Repeat([]byte{1}, 32)
+	tokEnc, _ := Encrypt([]byte("tok"), key)
+	t1 := Tenant{
+		ID: uuid.New(), ChatwootURL: mock.URL,
+		ChatwootTokenEnc: tokEnc, ChatwootAccountID: 1, ChatwootInboxID: 5,
+	}
+	s := &Server{Key: key}
+	att := []Attachment{{URL: "https://media.example/img.jpg", Kind: "image", Caption: "hi"}}
+	if err := s.postChatwootMessage(context.Background(), t1, 42, "hi", "WAID-1", att); err != nil {
+		t.Fatalf("postChatwootMessage: %v", err)
+	}
+	atts, _ := captured["attachments"].([]any)
+	if len(atts) != 1 {
+		t.Fatalf("expected 1 attachment in body, got %d", len(atts))
+	}
+	first, _ := atts[0].(map[string]any)
+	if first["file_url"] != "https://media.example/img.jpg" {
+		t.Errorf("file_url: got %v", first["file_url"])
+	}
+	if first["file_type"] != "image" {
+		t.Errorf("file_type: got %v", first["file_type"])
+	}
+}
 
 func TestRetriable_DefaultIsRetriable(t *testing.T) {
 	require.True(t, isRetriable(errors.New("network")))
@@ -78,7 +111,7 @@ func TestPostChatwootMessage_SendsExternalID(t *testing.T) {
 	}))
 	defer srv.Close()
 	s, t2 := newBridgeWithCW(t, srv.URL)
-	err := s.postChatwootMessage(context.Background(), t2, 99, "hello", "wa-1")
+	err := s.postChatwootMessage(context.Background(), t2, 99, "hello", "wa-1", nil)
 	require.NoError(t, err)
 	require.Equal(t, "hello", captured["content"])
 	attrs := captured["content_attributes"].(map[string]any)
@@ -215,4 +248,150 @@ func newBridgeWithCW(t *testing.T, host string) (*Server, Tenant) {
 		ChatwootInboxID:   2,
 	}
 	return s, tn
+}
+
+func TestWaAttachment_ImageMessage(t *testing.T) {
+	body := []byte(`{
+		"key":{"id":"WAID-1","remoteJid":"5511999999999@s.whatsapp.net","fromMe":false},
+		"message":{"imageMessage":{"url":"https://media.example/img.jpg","mimetype":"image/jpeg","caption":"hello"}}
+	}`)
+	p, err := parseWA(body)
+	if err != nil {
+		t.Fatalf("parseWA: %v", err)
+	}
+	att, ok := waAttachment(p)
+	if !ok {
+		t.Fatalf("expected attachment, got none")
+	}
+	if att.URL != "https://media.example/img.jpg" {
+		t.Errorf("URL: got %q", att.URL)
+	}
+	if att.MimeType != "image/jpeg" {
+		t.Errorf("MimeType: got %q", att.MimeType)
+	}
+	if att.Caption != "hello" {
+		t.Errorf("Caption: got %q", att.Caption)
+	}
+	if att.Kind != "image" {
+		t.Errorf("Kind: got %q", att.Kind)
+	}
+}
+
+func TestWaAttachment_AudioMessage(t *testing.T) {
+	body := []byte(`{
+		"key":{"id":"WAID-2","remoteJid":"5511999999999@s.whatsapp.net","fromMe":false},
+		"message":{"audioMessage":{"url":"https://media.example/audio.ogg","mimetype":"audio/ogg","ptt":true}}
+	}`)
+	p, _ := parseWA(body)
+	att, ok := waAttachment(p)
+	if !ok || att.URL != "https://media.example/audio.ogg" || att.Kind != "audio" {
+		t.Fatalf("audio: %+v ok=%v", att, ok)
+	}
+}
+
+func TestWaAttachment_StickerMessage(t *testing.T) {
+	body := []byte(`{
+		"key":{"id":"WAID-3","remoteJid":"5511999999999@s.whatsapp.net","fromMe":false},
+		"message":{"stickerMessage":{"url":"https://media.example/sticker.webp","mimetype":"image/webp"}}
+	}`)
+	p, _ := parseWA(body)
+	att, ok := waAttachment(p)
+	if !ok || att.URL != "https://media.example/sticker.webp" || att.Kind != "image" {
+		t.Fatalf("sticker: %+v ok=%v", att, ok)
+	}
+}
+
+func TestWaAttachment_VideoMessage(t *testing.T) {
+	body := []byte(`{
+		"key":{"id":"WAID-4","remoteJid":"5511999999999@s.whatsapp.net","fromMe":false},
+		"message":{"videoMessage":{"url":"https://media.example/v.mp4","mimetype":"video/mp4","caption":"watch"}}
+	}`)
+	p, _ := parseWA(body)
+	att, ok := waAttachment(p)
+	if !ok || att.URL != "https://media.example/v.mp4" || att.Kind != "video" || att.Caption != "watch" {
+		t.Fatalf("video: %+v ok=%v", att, ok)
+	}
+}
+
+func TestWaAttachment_DocumentMessage(t *testing.T) {
+	body := []byte(`{
+		"key":{"id":"WAID-5","remoteJid":"5511999999999@s.whatsapp.net","fromMe":false},
+		"message":{"documentMessage":{"url":"https://media.example/doc.pdf","mimetype":"application/pdf","fileName":"contract.pdf","caption":"sign"}}
+	}`)
+	p, _ := parseWA(body)
+	att, ok := waAttachment(p)
+	if !ok || att.FileName != "contract.pdf" || att.Kind != "document" {
+		t.Fatalf("doc: %+v ok=%v", att, ok)
+	}
+}
+
+func TestSendMegaAPIMedia_PostsMediaUrlEndpoint(t *testing.T) {
+	var path string
+	var body map[string]any
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer mock.Close()
+	key := bytes.Repeat([]byte{1}, 32)
+	tokEnc, _ := Encrypt([]byte("tok"), key)
+	t1 := Tenant{
+		MegaAPIHost: mock.URL, MegaAPIInstance: "abc", MegaAPITokenEnc: tokEnc,
+	}
+	s := &Server{Key: key}
+	att := Attachment{URL: "https://m.example/x.jpg", Kind: "image", Caption: "hi"}
+	if err := s.sendMegaAPIMedia(context.Background(), t1, "5511999999999", att); err != nil {
+		t.Fatalf("sendMegaAPIMedia: %v", err)
+	}
+	if path != "/rest/sendMessage/abc/mediaUrl" {
+		t.Errorf("path: got %q", path)
+	}
+	md, _ := body["messageData"].(map[string]any)
+	if md["mediaUrl"] != "https://m.example/x.jpg" {
+		t.Errorf("mediaUrl: got %v", md["mediaUrl"])
+	}
+	if md["type"] != "image" {
+		t.Errorf("type: got %v", md["type"])
+	}
+	if md["caption"] != "hi" {
+		t.Errorf("caption: got %v", md["caption"])
+	}
+}
+
+func TestCwAttachments_Extracts(t *testing.T) {
+	body := []byte(`{
+		"event":"message_created","message_type":"outgoing","private":false,"id":42,
+		"content":"hello","conversation":{"id":1,"contact_inbox":{"source_id":"5511999999999"}},
+		"attachments":[
+			{"file_type":"image","data_url":"https://cw.example/a.jpg"},
+			{"file_type":"file","data_url":"https://cw.example/b.pdf"}
+		]
+	}`)
+	p, err := parseCW(body)
+	if err != nil {
+		t.Fatalf("parseCW: %v", err)
+	}
+	atts := cwAttachments(p)
+	if len(atts) != 2 {
+		t.Fatalf("expected 2, got %d", len(atts))
+	}
+	if atts[0].URL != "https://cw.example/a.jpg" || atts[0].Kind != "image" {
+		t.Errorf("att0: %+v", atts[0])
+	}
+	if atts[1].Kind != "document" {
+		t.Errorf("att1.Kind: got %q want document", atts[1].Kind)
+	}
+}
+
+func TestWaAttachment_TextOnly_ReturnsFalse(t *testing.T) {
+	body := []byte(`{
+		"key":{"id":"WAID-6","remoteJid":"5511999999999@s.whatsapp.net","fromMe":false},
+		"message":{"conversation":"hi"}
+	}`)
+	p, _ := parseWA(body)
+	if _, ok := waAttachment(p); ok {
+		t.Fatalf("expected no attachment for text-only")
+	}
 }

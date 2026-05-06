@@ -128,7 +128,40 @@ type waPayload struct {
 		Extended     struct {
 			Text string `json:"text"`
 		} `json:"extendedTextMessage"`
+		Image struct {
+			URL      string `json:"url"`
+			MimeType string `json:"mimetype"`
+			Caption  string `json:"caption"`
+		} `json:"imageMessage"`
+		Audio struct {
+			URL      string `json:"url"`
+			MimeType string `json:"mimetype"`
+			PTT      bool   `json:"ptt"`
+		} `json:"audioMessage"`
+		Sticker struct {
+			URL      string `json:"url"`
+			MimeType string `json:"mimetype"`
+		} `json:"stickerMessage"`
+		Video struct {
+			URL      string `json:"url"`
+			MimeType string `json:"mimetype"`
+			Caption  string `json:"caption"`
+		} `json:"videoMessage"`
+		Document struct {
+			URL      string `json:"url"`
+			MimeType string `json:"mimetype"`
+			FileName string `json:"fileName"`
+			Caption  string `json:"caption"`
+		} `json:"documentMessage"`
 	} `json:"message"`
+}
+
+type Attachment struct {
+	URL      string
+	MimeType string
+	Caption  string
+	FileName string
+	Kind     string // "image" | "audio" | "video" | "document" | "sticker"
 }
 
 type cwPayload struct {
@@ -147,6 +180,10 @@ type cwPayload struct {
 		Name        string `json:"name"`
 		PhoneNumber string `json:"phone_number"`
 	} `json:"sender"`
+	Attachments []struct {
+		FileType string `json:"file_type"`
+		DataURL  string `json:"data_url"`
+	} `json:"attachments"`
 }
 
 func extractWAExternalID(body []byte) (string, bool) {
@@ -185,11 +222,70 @@ func parseCW(body []byte) (cwPayload, error) {
 	return p, err
 }
 
+func cwAttachments(p cwPayload) []Attachment {
+	if len(p.Attachments) == 0 {
+		return nil
+	}
+	out := make([]Attachment, 0, len(p.Attachments))
+	for _, a := range p.Attachments {
+		if a.DataURL == "" {
+			continue
+		}
+		out = append(out, Attachment{URL: a.DataURL, Kind: cwTypeToMega(a.FileType)})
+	}
+	return out
+}
+
+func cwTypeToMega(ft string) string {
+	switch ft {
+	case "image":
+		return "image"
+	case "audio":
+		return "audio"
+	case "video":
+		return "video"
+	default:
+		return "document"
+	}
+}
+
 func waText(p waPayload) string {
 	if p.Message.Conversation != "" {
 		return p.Message.Conversation
 	}
 	return p.Message.Extended.Text
+}
+
+func waAttachment(p waPayload) (Attachment, bool) {
+	if p.Message.Image.URL != "" {
+		return Attachment{
+			URL: p.Message.Image.URL, MimeType: p.Message.Image.MimeType,
+			Caption: p.Message.Image.Caption, Kind: "image",
+		}, true
+	}
+	if p.Message.Audio.URL != "" {
+		return Attachment{
+			URL: p.Message.Audio.URL, MimeType: p.Message.Audio.MimeType, Kind: "audio",
+		}, true
+	}
+	if p.Message.Sticker.URL != "" {
+		return Attachment{
+			URL: p.Message.Sticker.URL, MimeType: p.Message.Sticker.MimeType, Kind: "image",
+		}, true
+	}
+	if p.Message.Video.URL != "" {
+		return Attachment{
+			URL: p.Message.Video.URL, MimeType: p.Message.Video.MimeType,
+			Caption: p.Message.Video.Caption, Kind: "video",
+		}, true
+	}
+	if p.Message.Document.URL != "" {
+		return Attachment{
+			URL: p.Message.Document.URL, MimeType: p.Message.Document.MimeType,
+			Caption: p.Message.Document.Caption, FileName: p.Message.Document.FileName, Kind: "document",
+		}, true
+	}
+	return Attachment{}, false
 }
 
 func waContactJID(p waPayload) string {
@@ -220,7 +316,15 @@ func (s *Server) processInbound(ctx context.Context, job Job) error {
 	}); err != nil {
 		return err
 	}
-	return s.postChatwootMessage(ctx, tenant, convID, waText(p), p.Key.ID)
+	var atts []Attachment
+	if a, ok := waAttachment(p); ok {
+		atts = []Attachment{a}
+	}
+	content := waText(p)
+	if content == "" && len(atts) > 0 {
+		content = atts[0].Caption
+	}
+	return s.postChatwootMessage(ctx, tenant, convID, content, p.Key.ID, atts)
 }
 
 func (s *Server) processOutbound(ctx context.Context, job Job) error {
@@ -236,10 +340,24 @@ func (s *Server) processOutbound(ctx context.Context, job Job) error {
 	if jid == "" {
 		jid = p.Sender.PhoneNumber
 	}
-	if jid == "" || p.Content == "" {
+	atts := cwAttachments(p)
+	if jid == "" || (p.Content == "" && len(atts) == 0) {
 		return notRetriable(errors.New("missing recipient or content"))
 	}
-	return s.sendMegaAPIText(ctx, tenant, jid, p.Content)
+	if len(atts) == 0 {
+		return s.sendMegaAPIText(ctx, tenant, jid, p.Content)
+	}
+	for i, a := range atts {
+		if i == 0 {
+			a.Caption = p.Content
+		} else {
+			a.Caption = ""
+		}
+		if err := s.sendMegaAPIMedia(ctx, tenant, jid, a); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Server) tenantByID(ctx context.Context, id uuid.UUID) (Tenant, error) {
@@ -329,11 +447,18 @@ func (s *Server) cwCreateConversation(ctx context.Context, t Tenant, contactID i
 	return resp.ID, nil
 }
 
-func (s *Server) postChatwootMessage(ctx context.Context, t Tenant, convID int64, content, externalID string) error {
+func (s *Server) postChatwootMessage(ctx context.Context, t Tenant, convID int64, content, externalID string, attachments []Attachment) error {
 	body := map[string]any{
 		"content":            content,
 		"message_type":       "incoming",
 		"content_attributes": map[string]any{"external_id": externalID},
+	}
+	if len(attachments) > 0 {
+		out := make([]map[string]any, 0, len(attachments))
+		for _, a := range attachments {
+			out = append(out, map[string]any{"file_url": a.URL, "file_type": a.Kind})
+		}
+		body["attachments"] = out
 	}
 	url := fmt.Sprintf("%s/api/v1/accounts/%d/conversations/%d/messages",
 		strings.TrimRight(t.ChatwootURL, "/"), t.ChatwootAccountID, convID)
@@ -394,6 +519,34 @@ func (s *Server) sendMegaAPIText(ctx context.Context, t Tenant, to, text string)
 		"to": to, "text": text, "isGroup": false, "linkPreview": false,
 	}}
 	url := fmt.Sprintf("%s/rest/sendMessage/%s/text",
+		strings.TrimRight(t.MegaAPIHost, "/"), t.MegaAPIInstance)
+	resp, err := bearerPost(ctx, url, string(tok), body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return classifyHTTP(resp, "megaapi")
+}
+
+func (s *Server) sendMegaAPIMedia(ctx context.Context, t Tenant, to string, att Attachment) error {
+	tok, err := Decrypt(t.MegaAPITokenEnc, s.Key)
+	if err != nil {
+		return notRetriable(err)
+	}
+	md := map[string]any{
+		"to":       to,
+		"mediaUrl": att.URL,
+		"type":     att.Kind,
+		"caption":  att.Caption,
+	}
+	if att.FileName != "" {
+		md["fileName"] = att.FileName
+	}
+	if att.MimeType != "" {
+		md["mimetype"] = att.MimeType
+	}
+	body := map[string]any{"messageData": md}
+	url := fmt.Sprintf("%s/rest/sendMessage/%s/mediaUrl",
 		strings.TrimRight(t.MegaAPIHost, "/"), t.MegaAPIInstance)
 	resp, err := bearerPost(ctx, url, string(tok), body)
 	if err != nil {

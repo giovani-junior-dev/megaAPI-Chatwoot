@@ -8,6 +8,8 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -228,6 +230,141 @@ func TestRecoverPending_RoutesByDirection(t *testing.T) {
 	require.NoError(t, s.RecoverPending(context.Background()))
 	require.Equal(t, 1, len(s.Inbox))
 	require.Equal(t, 1, len(s.Outbox))
+}
+
+func TestProcessOutbound_MultipleAttachments_CaptionOnlyOnFirst(t *testing.T) {
+	db := setupDB(t)
+	captions := []string{}
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		md, _ := body["messageData"].(map[string]any)
+		captions = append(captions, fmt.Sprint(md["caption"]))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer mock.Close()
+	key := bytes.Repeat([]byte{1}, 32)
+	tokEnc, _ := Encrypt([]byte("tok"), key)
+	tID, err := db.InsertTenant(context.Background(), TenantInsert{
+		Slug: "demo-out", MegaAPIHost: mock.URL, MegaAPIInstance: "abc",
+		MegaAPITokenEnc: tokEnc, ChatwootURL: "http://x", ChatwootTokenEnc: tokEnc,
+		ChatwootAccountID: 1, ChatwootInboxID: 5,
+		HMACSecretEnc: tokEnc, WebhookBearerEnc: tokEnc,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = db.Pool.Exec(context.Background(), `DELETE FROM tenants WHERE id = $1`, tID)
+	})
+	s := &Server{Key: key, DB: db}
+	body := []byte(`{
+		"event":"message_created","message_type":"outgoing","private":false,"id":1,
+		"content":"hello",
+		"conversation":{"id":1,"contact_inbox":{"source_id":"5511999999999"}},
+		"attachments":[
+			{"file_type":"image","data_url":"https://m/1.jpg"},
+			{"file_type":"image","data_url":"https://m/2.jpg"},
+			{"file_type":"image","data_url":"https://m/3.jpg"}
+		]
+	}`)
+	require.NoError(t, s.processOutbound(context.Background(), Job{TenantID: tID, Payload: body}))
+	require.Equal(t, 3, len(captions))
+	require.Equal(t, "hello", captions[0])
+	require.Equal(t, "", captions[1])
+	require.Equal(t, "", captions[2])
+}
+
+func TestProcessInbound_ImageMessage_PostsAttachmentToCW(t *testing.T) {
+	db := setupDB(t)
+	var capturedBody map[string]any
+	cwMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/messages"):
+			_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		case strings.Contains(r.URL.Path, "/contacts"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"payload":{"contact":{"id":11}}}`))
+		case strings.Contains(r.URL.Path, "/conversations"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"id":99}`))
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer cwMock.Close()
+	key := bytes.Repeat([]byte{1}, 32)
+	tokEnc, _ := Encrypt([]byte("tok"), key)
+	tID, err := db.InsertTenant(context.Background(), TenantInsert{
+		Slug: "demo-in", MegaAPIHost: "http://x", MegaAPIInstance: "abc",
+		MegaAPITokenEnc: tokEnc, ChatwootURL: cwMock.URL, ChatwootTokenEnc: tokEnc,
+		ChatwootAccountID: 1, ChatwootInboxID: 5,
+		HMACSecretEnc: tokEnc, WebhookBearerEnc: tokEnc,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = db.Pool.Exec(context.Background(), `DELETE FROM tenants WHERE id = $1`, tID)
+	})
+	s := &Server{Key: key, DB: db}
+	body := []byte(`{
+		"key":{"id":"WAID-IMG","remoteJid":"5511999999999@s.whatsapp.net","fromMe":false},
+		"pushName":"Alice",
+		"message":{"imageMessage":{"url":"https://media.example/img.jpg","mimetype":"image/jpeg","caption":"hello"}}
+	}`)
+	require.NoError(t, s.processInbound(context.Background(), Job{TenantID: tID, Payload: body}))
+	atts, _ := capturedBody["attachments"].([]any)
+	require.Equal(t, 1, len(atts), "expected 1 attachment")
+	first := atts[0].(map[string]any)
+	require.Equal(t, "https://media.example/img.jpg", first["file_url"])
+	require.Equal(t, "image", first["file_type"])
+	require.Equal(t, "hello", capturedBody["content"])
+}
+
+func TestProcessInbound_DocumentMessage_PostsFileNameAndCaption(t *testing.T) {
+	db := setupDB(t)
+	var capturedBody map[string]any
+	cwMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/messages"):
+			_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		case strings.Contains(r.URL.Path, "/contacts"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"payload":{"contact":{"id":12}}}`))
+		case strings.Contains(r.URL.Path, "/conversations"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"id":100}`))
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer cwMock.Close()
+	key := bytes.Repeat([]byte{1}, 32)
+	tokEnc, _ := Encrypt([]byte("tok"), key)
+	tID, err := db.InsertTenant(context.Background(), TenantInsert{
+		Slug: "demo-doc", MegaAPIHost: "http://x", MegaAPIInstance: "abc",
+		MegaAPITokenEnc: tokEnc, ChatwootURL: cwMock.URL, ChatwootTokenEnc: tokEnc,
+		ChatwootAccountID: 1, ChatwootInboxID: 5,
+		HMACSecretEnc: tokEnc, WebhookBearerEnc: tokEnc,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = db.Pool.Exec(context.Background(), `DELETE FROM tenants WHERE id = $1`, tID)
+	})
+	s := &Server{Key: key, DB: db}
+	body := []byte(`{
+		"key":{"id":"WAID-DOC","remoteJid":"5511999999999@s.whatsapp.net","fromMe":false},
+		"pushName":"Alice",
+		"message":{"documentMessage":{"url":"https://media.example/c.pdf","mimetype":"application/pdf","fileName":"contract.pdf","caption":"sign please"}}
+	}`)
+	require.NoError(t, s.processInbound(context.Background(), Job{TenantID: tID, Payload: body}))
+	require.Equal(t, "sign please", capturedBody["content"])
+	atts, _ := capturedBody["attachments"].([]any)
+	require.Equal(t, 1, len(atts))
+	first := atts[0].(map[string]any)
+	require.Equal(t, "document", first["file_type"])
 }
 
 func TestRecoverPending_FullChannelSkipsNotBlocks(t *testing.T) {
