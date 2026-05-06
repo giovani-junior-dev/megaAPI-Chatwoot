@@ -514,6 +514,34 @@ func (s *Server) sendMegaAPIText(ctx context.Context, t Tenant, to, text string)
 	return classifyHTTP(resp, "megaapi")
 }
 
+func (s *Server) sendMegaAPIMedia(ctx context.Context, t Tenant, to string, att Attachment) error {
+	tok, err := Decrypt(t.MegaAPITokenEnc, s.Key)
+	if err != nil {
+		return notRetriable(err)
+	}
+	md := map[string]any{
+		"to":       to,
+		"mediaUrl": att.URL,
+		"type":     att.Kind,
+		"caption":  att.Caption,
+	}
+	if att.FileName != "" {
+		md["fileName"] = att.FileName
+	}
+	if att.MimeType != "" {
+		md["mimetype"] = att.MimeType
+	}
+	body := map[string]any{"messageData": md}
+	url := fmt.Sprintf("%s/rest/sendMessage/%s/mediaUrl",
+		strings.TrimRight(t.MegaAPIHost, "/"), t.MegaAPIInstance)
+	resp, err := bearerPost(ctx, url, string(tok), body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return classifyHTTP(resp, "megaapi")
+}
+
 func bearerPost(ctx context.Context, url, tok string, in any) (*http.Response, error) {
 	buf, _ := json.Marshal(in)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(buf))

@@ -325,6 +325,41 @@ func TestWaAttachment_DocumentMessage(t *testing.T) {
 	}
 }
 
+func TestSendMegaAPIMedia_PostsMediaUrlEndpoint(t *testing.T) {
+	var path string
+	var body map[string]any
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer mock.Close()
+	key := bytes.Repeat([]byte{1}, 32)
+	tokEnc, _ := Encrypt([]byte("tok"), key)
+	t1 := Tenant{
+		MegaAPIHost: mock.URL, MegaAPIInstance: "abc", MegaAPITokenEnc: tokEnc,
+	}
+	s := &Server{Key: key}
+	att := Attachment{URL: "https://m.example/x.jpg", Kind: "image", Caption: "hi"}
+	if err := s.sendMegaAPIMedia(context.Background(), t1, "5511999999999", att); err != nil {
+		t.Fatalf("sendMegaAPIMedia: %v", err)
+	}
+	if path != "/rest/sendMessage/abc/mediaUrl" {
+		t.Errorf("path: got %q", path)
+	}
+	md, _ := body["messageData"].(map[string]any)
+	if md["mediaUrl"] != "https://m.example/x.jpg" {
+		t.Errorf("mediaUrl: got %v", md["mediaUrl"])
+	}
+	if md["type"] != "image" {
+		t.Errorf("type: got %v", md["type"])
+	}
+	if md["caption"] != "hi" {
+		t.Errorf("caption: got %v", md["caption"])
+	}
+}
+
 func TestCwAttachments_Extracts(t *testing.T) {
 	body := []byte(`{
 		"event":"message_created","message_type":"outgoing","private":false,"id":42,
