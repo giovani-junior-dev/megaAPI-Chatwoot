@@ -1,0 +1,62 @@
+name: chatwoot-dev
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: chatwoot
+      POSTGRES_PASSWORD: chatwoot
+      POSTGRES_DB: chatwoot
+    ports:
+      - "5434:5432"
+    volumes:
+      - chatwoot_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatwoot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "chatwoot"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - chatwoot_redis:/data
+
+  rails:
+    image: chatwoot/chatwoot:v4.13.0-ce
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file: chatwoot.env
+    volumes:
+      - chatwoot_storage:/app/storage
+    ports:
+      - "3000:3000"
+    entrypoint: docker/entrypoints/rails.sh
+    command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
+
+  sidekiq:
+    image: chatwoot/chatwoot:v4.13.0-ce
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file: chatwoot.env
+    volumes:
+      - chatwoot_storage:/app/storage
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+
+volumes:
+  chatwoot_pg:
+  chatwoot_redis:
+  chatwoot_storage:

@@ -24,3 +24,4 @@ coverage.txt
 # Archon workflow internals
 .archon/artifacts/
 .archon/logs/
+deploy/chatwoot.env
