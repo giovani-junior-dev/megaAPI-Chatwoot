@@ -1,6 +1,15 @@
-# Project Instructions for AI Agents
+# CLAUDE.md
 
-This file provides instructions and context for AI coding agents working on this project.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Mandatory Skills & Tools
+
+- **`/code-craftsman`** — always ON. Enforce TDD, clean code, flat architecture every session.
+- **`chatwoot-api` skill** — use for ALL Chatwoot API questions. Has full API reference.
+- **context7 MCP** — use for Chatwoot library/framework docs (`mcp__plugin_context7_context7__query-docs`). Never guess API shape.
+- **megaAPI questions** — ask the user. They built megaAPI and have authoritative answers on payload shapes, endpoints, auth behavior.
+
+## Project Instructions for AI Agents
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
