@@ -137,8 +137,12 @@ Write-Ok ".env escrito em $bridgeEnv"
 Write-Step "Subindo bridge stack (docker compose up -d)"
 Push-Location $RepoRoot
 try {
-    docker compose up -d --build 2>&1 | ForEach-Object { Write-Host "    $_" }
-    if ($LASTEXITCODE -ne 0) { Fail "docker compose up falhou" }
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & docker compose up -d --build *>&1 | ForEach-Object { Write-Host "    $_" }
+    $rc = $LASTEXITCODE
+    $ErrorActionPreference = $prevEAP
+    if ($rc -ne 0) { Fail "docker compose up falhou (exit $rc)" }
 } finally {
     Pop-Location
 }
@@ -169,8 +173,12 @@ Write-Ok "Bridge healthy em $bridgeBase"
 Write-Step "Aplicando migrations"
 Push-Location $RepoRoot
 try {
-    docker compose exec -T bridge /bridge migrate 2>&1 | ForEach-Object { Write-Host "    $_" }
-    if ($LASTEXITCODE -ne 0) { Fail "bridge migrate falhou" }
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & docker compose exec -T bridge /bridge migrate *>&1 | ForEach-Object { Write-Host "    $_" }
+    $rc = $LASTEXITCODE
+    $ErrorActionPreference = $prevEAP
+    if ($rc -ne 0) { Fail "bridge migrate falhou (exit $rc)" }
 } finally {
     Pop-Location
 }
@@ -213,8 +221,11 @@ if ($existing) {
     )
     Push-Location $RepoRoot
     try {
-        $tenantOut = & docker @tenantArgs 2>&1
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $tenantOut = & docker @tenantArgs *>&1
         $tenantExit = $LASTEXITCODE
+        $ErrorActionPreference = $prevEAP
     } finally {
         Pop-Location
     }
@@ -254,9 +265,13 @@ if ($existingTunnel -and $ReuseTunnel -and (Test-Path $TunnelUrlFile)) {
     Write-Ok "Reusando tunnel existente: $tunnelUrl"
 } else {
     if ($existingTunnel) {
-        Write-Warn2 "Encontrado cloudflared rodando — encerrando antes de iniciar novo (use -ReuseTunnel para evitar)"
-        $existingTunnel | Stop-Process -Force
-        Start-Sleep -Seconds 2
+        Write-Warn2 "Encontrado cloudflared rodando — tentando encerrar (use -ReuseTunnel para evitar)"
+        try {
+            $existingTunnel | Stop-Process -Force -ErrorAction Stop
+            Start-Sleep -Seconds 2
+        } catch {
+            Write-Warn2 "Não consegui encerrar cloudflared existente (provavelmente service/admin). Iniciando novo quick tunnel em paralelo — múltiplas instâncias coexistem."
+        }
     }
 
     if (Test-Path $TunnelLog) { Remove-Item $TunnelLog -Force }

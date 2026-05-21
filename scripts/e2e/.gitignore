@@ -1,4 +1,5 @@
 .env.e2e
 *.log
+*.log.err
 tunnel-url.txt
 tenant-creds.json
