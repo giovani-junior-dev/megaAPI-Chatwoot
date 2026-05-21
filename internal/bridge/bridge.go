@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"runtime"
 	"strings"
 	"sync"
@@ -426,9 +427,30 @@ func (s *Server) cwCreateContact(ctx context.Context, t Tenant, jid, name string
 		} `json:"payload"`
 	}
 	if err := s.cwDo(ctx, t, http.MethodPost, url, body, &resp); err != nil {
+		if strings.Contains(err.Error(), "already been taken") {
+			return s.cwFindContactByPhone(ctx, t, "+"+jid)
+		}
 		return 0, err
 	}
 	return resp.Payload.Contact.ID, nil
+}
+
+func (s *Server) cwFindContactByPhone(ctx context.Context, t Tenant, phone string) (int64, error) {
+	q := url.QueryEscape(phone)
+	endpoint := fmt.Sprintf("%s/api/v1/accounts/%d/contacts/search?q=%s&include=contact_inboxes",
+		strings.TrimRight(t.ChatwootURL, "/"), t.ChatwootAccountID, q)
+	var resp struct {
+		Payload []struct {
+			ID int64 `json:"id"`
+		} `json:"payload"`
+	}
+	if err := s.cwDo(ctx, t, http.MethodGet, endpoint, nil, &resp); err != nil {
+		return 0, err
+	}
+	if len(resp.Payload) == 0 {
+		return 0, retriable(fmt.Errorf("contact %s not found after duplicate", phone))
+	}
+	return resp.Payload[0].ID, nil
 }
 
 func (s *Server) cwCreateConversation(ctx context.Context, t Tenant, contactID int64, jid string) (int64, error) {
