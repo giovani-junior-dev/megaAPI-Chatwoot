@@ -62,6 +62,13 @@ func TestPostChatwootMessage_WithAttachment_UploadsMultipart(t *testing.T) {
 	require.Contains(t, body, string(mediaPayload))
 }
 
+func TestWaIsFromMe_TrueWhenKeyFromMeTrue(t *testing.T) {
+	require.True(t, waIsFromMe([]byte(`{"key":{"id":"X","fromMe":true}}`)))
+	require.False(t, waIsFromMe([]byte(`{"key":{"id":"X","fromMe":false}}`)))
+	require.False(t, waIsFromMe([]byte(`{"key":{"id":"X"}}`)))
+	require.False(t, waIsFromMe([]byte(`not-json`)))
+}
+
 func TestRetriable_DefaultIsRetriable(t *testing.T) {
 	require.True(t, isRetriable(errors.New("network")))
 }

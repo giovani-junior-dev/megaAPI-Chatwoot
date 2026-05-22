@@ -66,6 +66,86 @@ func TestPrepareMedia_NoContentLengthPassthrough(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestPrepareMedia_AudioMP3MimeAcceptedKindBecomesPTT(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "1024")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mock.Close()
+	s := &Server{}
+	att, err := s.prepareMedia(context.Background(), Attachment{
+		Kind: "audio", MimeType: "audio/mpeg", URL: mock.URL,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "ptt", att.Kind)
+}
+
+func TestPrepareMedia_AudioOggOpusAcceptedKindBecomesPTT(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "1024")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mock.Close()
+	s := &Server{}
+	for _, mime := range []string{"audio/ogg", "audio/opus"} {
+		att, err := s.prepareMedia(context.Background(), Attachment{
+			Kind: "audio", MimeType: mime, URL: mock.URL,
+		})
+		require.NoError(t, err, "mime=%s", mime)
+		require.Equal(t, "ptt", att.Kind)
+	}
+}
+
+func TestPrepareMedia_AudioWavRejected(t *testing.T) {
+	s := &Server{}
+	_, err := s.prepareMedia(context.Background(), Attachment{
+		Kind: "audio", MimeType: "audio/wav", URL: "https://x/y.wav",
+	})
+	require.Error(t, err)
+	var fe fatalError
+	require.True(t, errors.As(err, &fe))
+	require.Contains(t, err.Error(), "audio format")
+}
+
+func TestPrepareMedia_AudioByExtensionWhenMimeMissing(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "1024")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mock.Close()
+	s := &Server{}
+	att, err := s.prepareMedia(context.Background(), Attachment{
+		Kind: "audio", FileName: "voice.ogg", URL: mock.URL,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "ptt", att.Kind)
+}
+
+func TestPrepareMedia_AudioOversizeRejected(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", strconv.Itoa(waLimitAudio+1))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mock.Close()
+	s := &Server{}
+	_, err := s.prepareMedia(context.Background(), Attachment{
+		Kind: "audio", MimeType: "audio/mpeg", URL: mock.URL,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "exceeds WhatsApp limit")
+}
+
+func TestIsAcceptedAudio(t *testing.T) {
+	require.True(t, isAcceptedAudio("audio/mpeg", ""))
+	require.True(t, isAcceptedAudio("audio/mp3", ""))
+	require.True(t, isAcceptedAudio("audio/ogg", ""))
+	require.True(t, isAcceptedAudio("audio/opus", ""))
+	require.True(t, isAcceptedAudio("", "mp3"))
+	require.True(t, isAcceptedAudio("", "ogg"))
+	require.False(t, isAcceptedAudio("audio/wav", "wav"))
+	require.False(t, isAcceptedAudio("audio/x-m4a", "m4a"))
+}
+
 func TestWaLimitFor(t *testing.T) {
 	require.Equal(t, int64(waLimitImage), waLimitFor("image"))
 	require.Equal(t, int64(waLimitVideo), waLimitFor("video"))

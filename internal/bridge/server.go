@@ -110,6 +110,10 @@ func (s *Server) handleWAWebhook(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if waIsFromMe(body) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ignored_from_me"})
+		return
+	}
 	extID, ok := extractWAExternalID(body)
 	if !ok {
 		http.Error(w, "missing external id", http.StatusBadRequest)

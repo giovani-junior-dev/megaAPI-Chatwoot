@@ -21,7 +21,7 @@ func waLimitFor(kind string) int64 {
 		return waLimitImage
 	case "video":
 		return waLimitVideo
-	case "audio":
+	case "audio", "ptt":
 		return waLimitAudio
 	default:
 		return waLimitDoc
@@ -32,6 +32,13 @@ func (s *Server) prepareMedia(ctx context.Context, att Attachment) (Attachment, 
 	if att.Kind == "image" && isHEIC(att.MimeType, att.FileName, att.URL) {
 		return att, notRetriable(fmt.Errorf("HEIC images not supported by WhatsApp — please convert to JPEG/PNG before sending"))
 	}
+	mime, ext := probeMedia(ctx, att)
+	if att.Kind == "audio" {
+		if !isAcceptedAudio(mime, ext) {
+			return att, notRetriable(fmt.Errorf("audio format %q not supported — only mp3 and ogg/opus accepted by WhatsApp", firstNonEmpty(mime, ext)))
+		}
+		att.Kind = "ptt"
+	}
 	size, err := headSize(ctx, att.URL)
 	if err == nil && size > 0 {
 		if limit := waLimitFor(att.Kind); size > limit {
@@ -39,6 +46,69 @@ func (s *Server) prepareMedia(ctx context.Context, att Attachment) (Attachment, 
 		}
 	}
 	return att, nil
+}
+
+func probeMedia(ctx context.Context, a Attachment) (mime, ext string) {
+	mime = strings.ToLower(strings.TrimSpace(a.MimeType))
+	ext = strings.ToLower(strings.TrimPrefix(extFromURLOrName(a.URL, a.FileName), "."))
+	if mime != "" {
+		return
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, a.URL, nil)
+	if err != nil {
+		return
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
+	if ct := resp.Header.Get("Content-Type"); ct != "" {
+		if i := strings.Index(ct, ";"); i >= 0 {
+			ct = ct[:i]
+		}
+		mime = strings.ToLower(strings.TrimSpace(ct))
+	}
+	return
+}
+
+func extFromURLOrName(rawURL, name string) string {
+	if name != "" {
+		if i := strings.LastIndex(name, "."); i >= 0 {
+			return name[i:]
+		}
+	}
+	u := rawURL
+	if i := strings.Index(u, "?"); i >= 0 {
+		u = u[:i]
+	}
+	if i := strings.LastIndex(u, "."); i >= 0 && i > strings.LastIndex(u, "/") {
+		return u[i:]
+	}
+	return ""
+}
+
+func isAcceptedAudio(mime, ext string) bool {
+	switch mime {
+	case "audio/mpeg", "audio/mp3":
+		return true
+	case "audio/ogg", "audio/opus", "audio/ogg; codecs=opus":
+		return true
+	}
+	switch ext {
+	case "mp3", "ogg", "opus", "oga":
+		return true
+	}
+	return false
+}
+
+func firstNonEmpty(ss ...string) string {
+	for _, s := range ss {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 func isHEIC(mime, name, rawURL string) bool {

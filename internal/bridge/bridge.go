@@ -199,6 +199,14 @@ type cwPayload struct {
 	} `json:"attachments"`
 }
 
+func waIsFromMe(body []byte) bool {
+	var p waPayload
+	if err := json.Unmarshal(body, &p); err != nil {
+		return false
+	}
+	return p.Key.FromMe
+}
+
 func extractWAExternalID(body []byte) (string, bool) {
 	var p waPayload
 	if err := json.Unmarshal(body, &p); err != nil || p.Key.ID == "" {
