@@ -117,7 +117,7 @@ try {
 
 Write-Host "==> [4/4] Aguardando processamento no bridge (timeout ${TimeoutSec}s)" -ForegroundColor Cyan
 $deadline = (Get-Date).AddSeconds($TimeoutSec)
-$sql = "SELECT status, COALESCE(last_error, '') FROM messages WHERE tenant_id = (SELECT id FROM tenants WHERE slug='$slug') AND direction='out' AND external_id='$cwMsgId';"
+$sql = "SELECT status, COALESCE(last_error, '') FROM messages WHERE tenant_id = (SELECT id FROM tenants WHERE slug='$slug') AND direction='out' AND external_id='cw-$cwMsgId';"
 
 $status = $null
 $lastErr = ''

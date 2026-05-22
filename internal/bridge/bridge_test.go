@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,36 +17,49 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPostChatwootMessage_WithAttachment_IncludesFileURL(t *testing.T) {
-	var captured map[string]any
-	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewDecoder(r.Body).Decode(&captured)
+func TestPostChatwootMessage_WithAttachment_UploadsMultipart(t *testing.T) {
+	mediaPayload := []byte("FAKEJPEGBYTES")
+	mediaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write(mediaPayload)
+	}))
+	defer mediaSrv.Close()
+
+	var gotContentType string
+	var gotToken string
+	var gotBody []byte
+	cwSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotContentType = r.Header.Get("Content-Type")
+		gotToken = r.Header.Get("api_access_token")
+		gotBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{}`))
 	}))
-	defer mock.Close()
+	defer cwSrv.Close()
+
 	key := bytes.Repeat([]byte{1}, 32)
 	tokEnc, _ := Encrypt([]byte("tok"), key)
 	t1 := Tenant{
-		ID: uuid.New(), ChatwootURL: mock.URL,
+		ID: uuid.New(), ChatwootURL: cwSrv.URL,
 		ChatwootTokenEnc: tokEnc, ChatwootAccountID: 1, ChatwootInboxID: 5,
 	}
 	s := &Server{Key: key}
-	att := []Attachment{{URL: "https://media.example/img.jpg", Kind: "image", Caption: "hi"}}
+	att := []Attachment{{URL: mediaSrv.URL + "/img.jpg", Kind: "image", MimeType: "image/jpeg"}}
 	if err := s.postChatwootMessage(context.Background(), t1, 42, "hi", "WAID-1", att); err != nil {
 		t.Fatalf("postChatwootMessage: %v", err)
 	}
-	atts, _ := captured["attachments"].([]any)
-	if len(atts) != 1 {
-		t.Fatalf("expected 1 attachment in body, got %d", len(atts))
-	}
-	first, _ := atts[0].(map[string]any)
-	if first["file_url"] != "https://media.example/img.jpg" {
-		t.Errorf("file_url: got %v", first["file_url"])
-	}
-	if first["file_type"] != "image" {
-		t.Errorf("file_type: got %v", first["file_type"])
-	}
+	require.Equal(t, "tok", gotToken)
+	require.Contains(t, gotContentType, "multipart/form-data")
+	body := string(gotBody)
+	require.Contains(t, body, `name="content"`)
+	require.Contains(t, body, "hi")
+	require.Contains(t, body, `name="message_type"`)
+	require.Contains(t, body, "incoming")
+	require.Contains(t, body, `name="content_attributes[external_id]"`)
+	require.Contains(t, body, "WAID-1")
+	require.Contains(t, body, `name="attachments[]"`)
+	require.Contains(t, body, "Content-Type: image/jpeg")
+	require.Contains(t, body, string(mediaPayload))
 }
 
 func TestRetriable_DefaultIsRetriable(t *testing.T) {
@@ -349,14 +363,23 @@ func TestSendMegaAPIMedia_PostsMediaUrlEndpoint(t *testing.T) {
 		t.Errorf("path: got %q", path)
 	}
 	md, _ := body["messageData"].(map[string]any)
-	if md["mediaUrl"] != "https://m.example/x.jpg" {
-		t.Errorf("mediaUrl: got %v", md["mediaUrl"])
+	if md["url"] != "https://m.example/x.jpg" {
+		t.Errorf("url: got %v", md["url"])
 	}
 	if md["type"] != "image" {
 		t.Errorf("type: got %v", md["type"])
 	}
 	if md["caption"] != "hi" {
 		t.Errorf("caption: got %v", md["caption"])
+	}
+	if md["fileName"] == "" || md["fileName"] == nil {
+		t.Errorf("fileName missing")
+	}
+	if _, ok := md["gifPlayback"]; !ok {
+		t.Errorf("gifPlayback missing")
+	}
+	if _, ok := md["viewOnce"]; !ok {
+		t.Errorf("viewOnce missing")
 	}
 }
 

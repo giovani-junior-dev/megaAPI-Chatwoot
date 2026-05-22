@@ -130,39 +130,51 @@ type waPayload struct {
 			Text string `json:"text"`
 		} `json:"extendedTextMessage"`
 		Image struct {
-			URL      string `json:"url"`
-			MimeType string `json:"mimetype"`
-			Caption  string `json:"caption"`
+			URL        string `json:"url"`
+			MimeType   string `json:"mimetype"`
+			Caption    string `json:"caption"`
+			MediaKey   string `json:"mediaKey"`
+			DirectPath string `json:"directPath"`
 		} `json:"imageMessage"`
 		Audio struct {
-			URL      string `json:"url"`
-			MimeType string `json:"mimetype"`
-			PTT      bool   `json:"ptt"`
+			URL        string `json:"url"`
+			MimeType   string `json:"mimetype"`
+			PTT        bool   `json:"ptt"`
+			MediaKey   string `json:"mediaKey"`
+			DirectPath string `json:"directPath"`
 		} `json:"audioMessage"`
 		Sticker struct {
-			URL      string `json:"url"`
-			MimeType string `json:"mimetype"`
+			URL        string `json:"url"`
+			MimeType   string `json:"mimetype"`
+			MediaKey   string `json:"mediaKey"`
+			DirectPath string `json:"directPath"`
 		} `json:"stickerMessage"`
 		Video struct {
-			URL      string `json:"url"`
-			MimeType string `json:"mimetype"`
-			Caption  string `json:"caption"`
+			URL        string `json:"url"`
+			MimeType   string `json:"mimetype"`
+			Caption    string `json:"caption"`
+			MediaKey   string `json:"mediaKey"`
+			DirectPath string `json:"directPath"`
 		} `json:"videoMessage"`
 		Document struct {
-			URL      string `json:"url"`
-			MimeType string `json:"mimetype"`
-			FileName string `json:"fileName"`
-			Caption  string `json:"caption"`
+			URL        string `json:"url"`
+			MimeType   string `json:"mimetype"`
+			FileName   string `json:"fileName"`
+			Caption    string `json:"caption"`
+			MediaKey   string `json:"mediaKey"`
+			DirectPath string `json:"directPath"`
 		} `json:"documentMessage"`
 	} `json:"message"`
 }
 
 type Attachment struct {
-	URL      string
-	MimeType string
-	Caption  string
-	FileName string
-	Kind     string // "image" | "audio" | "video" | "document" | "sticker"
+	URL        string
+	MimeType   string
+	Caption    string
+	FileName   string
+	Kind       string // "image" | "audio" | "video" | "document" | "sticker"
+	MediaKey   string
+	DirectPath string
 }
 
 type cwPayload struct {
@@ -262,28 +274,33 @@ func waAttachment(p waPayload) (Attachment, bool) {
 		return Attachment{
 			URL: p.Message.Image.URL, MimeType: p.Message.Image.MimeType,
 			Caption: p.Message.Image.Caption, Kind: "image",
+			MediaKey: p.Message.Image.MediaKey, DirectPath: p.Message.Image.DirectPath,
 		}, true
 	}
 	if p.Message.Audio.URL != "" {
 		return Attachment{
 			URL: p.Message.Audio.URL, MimeType: p.Message.Audio.MimeType, Kind: "audio",
+			MediaKey: p.Message.Audio.MediaKey, DirectPath: p.Message.Audio.DirectPath,
 		}, true
 	}
 	if p.Message.Sticker.URL != "" {
 		return Attachment{
 			URL: p.Message.Sticker.URL, MimeType: p.Message.Sticker.MimeType, Kind: "image",
+			MediaKey: p.Message.Sticker.MediaKey, DirectPath: p.Message.Sticker.DirectPath,
 		}, true
 	}
 	if p.Message.Video.URL != "" {
 		return Attachment{
 			URL: p.Message.Video.URL, MimeType: p.Message.Video.MimeType,
 			Caption: p.Message.Video.Caption, Kind: "video",
+			MediaKey: p.Message.Video.MediaKey, DirectPath: p.Message.Video.DirectPath,
 		}, true
 	}
 	if p.Message.Document.URL != "" {
 		return Attachment{
 			URL: p.Message.Document.URL, MimeType: p.Message.Document.MimeType,
 			Caption: p.Message.Document.Caption, FileName: p.Message.Document.FileName, Kind: "document",
+			MediaKey: p.Message.Document.MediaKey, DirectPath: p.Message.Document.DirectPath,
 		}, true
 	}
 	return Attachment{}, false
@@ -354,7 +371,11 @@ func (s *Server) processOutbound(ctx context.Context, job Job) error {
 		} else {
 			a.Caption = ""
 		}
-		if err := s.sendMegaAPIMedia(ctx, tenant, jid, a); err != nil {
+		prepared, err := s.prepareMedia(ctx, a)
+		if err != nil {
+			return err
+		}
+		if err := s.sendMegaAPIMedia(ctx, tenant, jid, prepared); err != nil {
 			return err
 		}
 	}
@@ -470,21 +491,17 @@ func (s *Server) cwCreateConversation(ctx context.Context, t Tenant, contactID i
 }
 
 func (s *Server) postChatwootMessage(ctx context.Context, t Tenant, convID int64, content, externalID string, attachments []Attachment) error {
-	body := map[string]any{
-		"content":            content,
-		"message_type":       "incoming",
-		"content_attributes": map[string]any{"external_id": externalID},
-	}
-	if len(attachments) > 0 {
-		out := make([]map[string]any, 0, len(attachments))
-		for _, a := range attachments {
-			out = append(out, map[string]any{"file_url": a.URL, "file_type": a.Kind})
-		}
-		body["attachments"] = out
-	}
 	url := fmt.Sprintf("%s/api/v1/accounts/%d/conversations/%d/messages",
 		strings.TrimRight(t.ChatwootURL, "/"), t.ChatwootAccountID, convID)
-	return s.cwDo(ctx, t, http.MethodPost, url, body, nil)
+	if len(attachments) == 0 {
+		body := map[string]any{
+			"content":            content,
+			"message_type":       "incoming",
+			"content_attributes": map[string]any{"external_id": externalID},
+		}
+		return s.cwDo(ctx, t, http.MethodPost, url, body, nil)
+	}
+	return s.cwPostMultipart(ctx, t, url, content, externalID, attachments)
 }
 
 func (s *Server) cwDo(ctx context.Context, t Tenant, method, url string, in any, out any) error {
@@ -556,16 +573,17 @@ func (s *Server) sendMegaAPIMedia(ctx context.Context, t Tenant, to string, att 
 		return notRetriable(err)
 	}
 	md := map[string]any{
-		"to":       to,
-		"mediaUrl": att.URL,
-		"type":     att.Kind,
-		"caption":  att.Caption,
+		"to":          to,
+		"url":         att.URL,
+		"type":        att.Kind,
+		"caption":     att.Caption,
+		"fileName":    att.FileName,
+		"mimeType":    att.MimeType,
+		"gifPlayback": false,
+		"viewOnce":    false,
 	}
-	if att.FileName != "" {
-		md["fileName"] = att.FileName
-	}
-	if att.MimeType != "" {
-		md["mimetype"] = att.MimeType
+	if md["fileName"] == "" {
+		md["fileName"] = defaultFileName(att.Kind, att.MimeType)
 	}
 	body := map[string]any{"messageData": md}
 	url := fmt.Sprintf("%s/rest/sendMessage/%s/mediaUrl",
@@ -591,6 +609,47 @@ func bearerPost(ctx context.Context, url, tok string, in any) (*http.Response, e
 		return nil, retriable(err)
 	}
 	return resp, nil
+}
+
+func defaultFileName(kind, mime string) string {
+	ext := mimeExt(mime)
+	if ext == "" {
+		switch kind {
+		case "image":
+			ext = ".jpg"
+		case "audio":
+			ext = ".ogg"
+		case "video":
+			ext = ".mp4"
+		default:
+			ext = ".bin"
+		}
+	}
+	return kind + ext
+}
+
+func mimeExt(mime string) string {
+	switch strings.ToLower(strings.TrimSpace(mime)) {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	case "image/gif":
+		return ".gif"
+	case "image/heic":
+		return ".heic"
+	case "audio/ogg", "audio/ogg; codecs=opus":
+		return ".ogg"
+	case "audio/mpeg":
+		return ".mp3"
+	case "video/mp4":
+		return ".mp4"
+	case "application/pdf":
+		return ".pdf"
+	}
+	return ""
 }
 
 func displayName(name, jid string) string {
