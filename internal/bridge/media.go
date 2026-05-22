@@ -17,7 +17,7 @@ const (
 
 func waLimitFor(kind string) int64 {
 	switch kind {
-	case "image":
+	case "image", "sticker":
 		return waLimitImage
 	case "video":
 		return waLimitVideo

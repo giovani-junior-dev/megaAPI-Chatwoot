@@ -361,7 +361,7 @@ func waAttachment(p waPayload) (Attachment, bool) {
 	}
 	if p.Message.Sticker.URL != "" {
 		return Attachment{
-			URL: p.Message.Sticker.URL, MimeType: p.Message.Sticker.MimeType, Kind: "image",
+			URL: p.Message.Sticker.URL, MimeType: p.Message.Sticker.MimeType, Kind: "sticker",
 			MediaKey: p.Message.Sticker.MediaKey, DirectPath: p.Message.Sticker.DirectPath,
 		}, true
 	}
@@ -697,6 +697,8 @@ func defaultFileName(kind, mime string) string {
 			ext = ".ogg"
 		case "video":
 			ext = ".mp4"
+		case "sticker":
+			ext = ".webp"
 		default:
 			ext = ".bin"
 		}

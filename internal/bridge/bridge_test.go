@@ -369,7 +369,7 @@ func TestWaAttachment_StickerMessage(t *testing.T) {
 	}`)
 	p, _ := parseWA(body)
 	att, ok := waAttachment(p)
-	if !ok || att.URL != "https://media.example/sticker.webp" || att.Kind != "image" {
+	if !ok || att.URL != "https://media.example/sticker.webp" || att.Kind != "sticker" {
 		t.Fatalf("sticker: %+v ok=%v", att, ok)
 	}
 }

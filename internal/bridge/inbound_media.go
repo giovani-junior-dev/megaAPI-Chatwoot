@@ -186,6 +186,8 @@ func extFromMime(mime, kind string) string {
 		return ".ogg"
 	case "video":
 		return ".mp4"
+	case "sticker":
+		return ".webp"
 	}
 	return ".bin"
 }
@@ -198,6 +200,8 @@ func defaultMime(kind string) string {
 		return "audio/ogg"
 	case "video":
 		return "video/mp4"
+	case "sticker":
+		return "image/webp"
 	}
 	return "application/octet-stream"
 }
