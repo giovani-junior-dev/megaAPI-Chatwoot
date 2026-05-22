@@ -194,8 +194,9 @@ type cwPayload struct {
 		PhoneNumber string `json:"phone_number"`
 	} `json:"sender"`
 	Attachments []struct {
-		FileType string `json:"file_type"`
-		DataURL  string `json:"data_url"`
+		FileType  string `json:"file_type"`
+		DataURL   string `json:"data_url"`
+		Extension string `json:"extension"`
 	} `json:"attachments"`
 }
 
@@ -252,9 +253,76 @@ func cwAttachments(p cwPayload) []Attachment {
 		if a.DataURL == "" {
 			continue
 		}
-		out = append(out, Attachment{URL: a.DataURL, Kind: cwTypeToMega(a.FileType)})
+		fileName := fileNameFromURL(a.DataURL, a.Extension)
+		out = append(out, Attachment{
+			URL:      a.DataURL,
+			Kind:     cwTypeToMega(a.FileType),
+			FileName: fileName,
+			MimeType: mimeFromExt(extOf(fileName, a.Extension)),
+		})
 	}
 	return out
+}
+
+func fileNameFromURL(rawURL, extension string) string {
+	u := rawURL
+	if i := strings.Index(u, "?"); i >= 0 {
+		u = u[:i]
+	}
+	slash := strings.LastIndex(u, "/")
+	if slash >= 0 && slash < len(u)-1 {
+		base := u[slash+1:]
+		if base != "" {
+			return base
+		}
+	}
+	if extension != "" {
+		return "file." + strings.TrimPrefix(extension, ".")
+	}
+	return "file"
+}
+
+func extOf(fileName, fallback string) string {
+	if i := strings.LastIndex(fileName, "."); i >= 0 {
+		return strings.ToLower(fileName[i+1:])
+	}
+	return strings.ToLower(strings.TrimPrefix(fallback, "."))
+}
+
+func mimeFromExt(ext string) string {
+	switch ext {
+	case "pdf":
+		return "application/pdf"
+	case "doc":
+		return "application/msword"
+	case "docx":
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	case "xls":
+		return "application/vnd.ms-excel"
+	case "xlsx":
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case "ppt":
+		return "application/vnd.ms-powerpoint"
+	case "pptx":
+		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+	case "zip":
+		return "application/zip"
+	case "txt":
+		return "text/plain"
+	case "csv":
+		return "text/csv"
+	case "mp3":
+		return "audio/mpeg"
+	case "ogg", "oga":
+		return "audio/ogg"
+	case "mp4":
+		return "video/mp4"
+	case "jpg", "jpeg":
+		return "image/jpeg"
+	case "png":
+		return "image/png"
+	}
+	return ""
 }
 
 func cwTypeToMega(ft string) string {

@@ -62,6 +62,58 @@ func TestPostChatwootMessage_WithAttachment_UploadsMultipart(t *testing.T) {
 	require.Contains(t, body, string(mediaPayload))
 }
 
+func TestCwAttachments_DocumentExtractsFileNameAndMime(t *testing.T) {
+	body := []byte(`{
+		"event":"message_created","id":1,
+		"attachments":[
+			{"file_type":"file","data_url":"http://cw.example/rails/active_storage/blobs/redirect/eyJ.../contract.pdf","extension":"pdf"}
+		]
+	}`)
+	p, err := parseCW(body)
+	require.NoError(t, err)
+	atts := cwAttachments(p)
+	require.Len(t, atts, 1)
+	require.Equal(t, "document", atts[0].Kind)
+	require.Equal(t, "contract.pdf", atts[0].FileName)
+	require.Equal(t, "application/pdf", atts[0].MimeType)
+}
+
+func TestCwAttachments_DocxXlsxZip(t *testing.T) {
+	body := []byte(`{
+		"event":"message_created","id":1,
+		"attachments":[
+			{"file_type":"file","data_url":"http://cw/rails/.../report.docx","extension":"docx"},
+			{"file_type":"file","data_url":"http://cw/rails/.../sheet.xlsx","extension":"xlsx"},
+			{"file_type":"file","data_url":"http://cw/rails/.../bundle.zip","extension":"zip"}
+		]
+	}`)
+	p, err := parseCW(body)
+	require.NoError(t, err)
+	atts := cwAttachments(p)
+	require.Len(t, atts, 3)
+	require.Equal(t, "report.docx", atts[0].FileName)
+	require.Equal(t, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", atts[0].MimeType)
+	require.Equal(t, "sheet.xlsx", atts[1].FileName)
+	require.Equal(t, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", atts[1].MimeType)
+	require.Equal(t, "bundle.zip", atts[2].FileName)
+	require.Equal(t, "application/zip", atts[2].MimeType)
+}
+
+func TestFileNameFromURL_StripsQueryAndUsesBasename(t *testing.T) {
+	require.Equal(t, "report.pdf",
+		fileNameFromURL("http://x/path/report.pdf?token=abc", ""))
+	require.Equal(t, "file.pdf",
+		fileNameFromURL("http://x/path/", "pdf"))
+	require.Equal(t, "file",
+		fileNameFromURL("http://x/path/", ""))
+}
+
+func TestMimeFromExt_KnownExtensions(t *testing.T) {
+	require.Equal(t, "application/pdf", mimeFromExt("pdf"))
+	require.Equal(t, "application/zip", mimeFromExt("zip"))
+	require.Equal(t, "", mimeFromExt("unknown"))
+}
+
 func TestWaIsFromMe_TrueWhenKeyFromMeTrue(t *testing.T) {
 	require.True(t, waIsFromMe([]byte(`{"key":{"id":"X","fromMe":true}}`)))
 	require.False(t, waIsFromMe([]byte(`{"key":{"id":"X","fromMe":false}}`)))
