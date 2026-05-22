@@ -39,6 +39,9 @@ func (s *Server) prepareMedia(ctx context.Context, att Attachment) (Attachment, 
 		}
 		att.Kind = "ptt"
 	}
+	if att.Kind == "video" && !isAcceptedVideo(mime, ext) {
+		return att, notRetriable(fmt.Errorf("video format %q not supported — only mp4 accepted by WhatsApp", firstNonEmpty(mime, ext)))
+	}
 	size, err := headSize(ctx, att.URL)
 	if err == nil && size > 0 {
 		if limit := waLimitFor(att.Kind); size > limit {
@@ -86,6 +89,18 @@ func extFromURLOrName(rawURL, name string) string {
 		return u[i:]
 	}
 	return ""
+}
+
+func isAcceptedVideo(mime, ext string) bool {
+	switch mime {
+	case "video/mp4":
+		return true
+	}
+	switch ext {
+	case "mp4":
+		return true
+	}
+	return false
 }
 
 func isAcceptedAudio(mime, ext string) bool {

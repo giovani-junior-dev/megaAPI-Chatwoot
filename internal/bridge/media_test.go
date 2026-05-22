@@ -135,6 +135,48 @@ func TestPrepareMedia_AudioOversizeRejected(t *testing.T) {
 	require.Contains(t, err.Error(), "exceeds WhatsApp limit")
 }
 
+func TestPrepareMedia_VideoMP4Accepted(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "1024")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mock.Close()
+	s := &Server{}
+	att, err := s.prepareMedia(context.Background(), Attachment{
+		Kind: "video", MimeType: "video/mp4", URL: mock.URL,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "video", att.Kind)
+}
+
+func TestPrepareMedia_VideoWebmRejected(t *testing.T) {
+	s := &Server{}
+	_, err := s.prepareMedia(context.Background(), Attachment{
+		Kind: "video", MimeType: "video/webm", URL: "https://x/y.webm",
+	})
+	require.Error(t, err)
+	var fe fatalError
+	require.True(t, errors.As(err, &fe))
+	require.Contains(t, err.Error(), "video format")
+}
+
+func TestPrepareMedia_VideoMovRejected(t *testing.T) {
+	s := &Server{}
+	_, err := s.prepareMedia(context.Background(), Attachment{
+		Kind: "video", MimeType: "video/quicktime", URL: "https://x/y.mov",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "video format")
+}
+
+func TestIsAcceptedVideo(t *testing.T) {
+	require.True(t, isAcceptedVideo("video/mp4", ""))
+	require.True(t, isAcceptedVideo("", "mp4"))
+	require.False(t, isAcceptedVideo("video/webm", "webm"))
+	require.False(t, isAcceptedVideo("video/quicktime", "mov"))
+	require.False(t, isAcceptedVideo("video/x-matroska", "mkv"))
+}
+
 func TestIsAcceptedAudio(t *testing.T) {
 	require.True(t, isAcceptedAudio("audio/mpeg", ""))
 	require.True(t, isAcceptedAudio("audio/mp3", ""))
