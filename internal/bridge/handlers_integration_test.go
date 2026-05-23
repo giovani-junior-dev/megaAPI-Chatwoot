@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -276,11 +277,21 @@ func TestProcessOutbound_MultipleAttachments_CaptionOnlyOnFirst(t *testing.T) {
 
 func TestProcessInbound_ImageMessage_PostsAttachmentToCW(t *testing.T) {
 	db := setupDB(t)
-	var capturedBody map[string]any
+	wantBytes := []byte("fake-jpeg-bytes")
+	mediaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write(wantBytes)
+	}))
+	defer mediaSrv.Close()
+	var msgCT string
+	var msgBody []byte
+	var msgContent string
 	cwMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.Contains(r.URL.Path, "/messages"):
-			_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+			msgCT = r.Header.Get("Content-Type")
+			msgBody, _ = io.ReadAll(r.Body)
+			msgContent = extractMultipartField(msgBody, "content")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{}`))
 		case strings.Contains(r.URL.Path, "/contacts"):
@@ -310,24 +321,33 @@ func TestProcessInbound_ImageMessage_PostsAttachmentToCW(t *testing.T) {
 	body := []byte(`{
 		"key":{"id":"WAID-IMG","remoteJid":"5511999999999@s.whatsapp.net","fromMe":false},
 		"pushName":"Alice",
-		"message":{"imageMessage":{"url":"https://media.example/img.jpg","mimetype":"image/jpeg","caption":"hello"}}
+		"message":{"imageMessage":{"url":"` + mediaSrv.URL + `/img.jpg","mimetype":"image/jpeg","caption":"hello"}}
 	}`)
 	require.NoError(t, s.processInbound(context.Background(), Job{TenantID: tID, Payload: body}))
-	atts, _ := capturedBody["attachments"].([]any)
-	require.Equal(t, 1, len(atts), "expected 1 attachment")
-	first := atts[0].(map[string]any)
-	require.Equal(t, "https://media.example/img.jpg", first["file_url"])
-	require.Equal(t, "image", first["file_type"])
-	require.Equal(t, "hello", capturedBody["content"])
+	require.Contains(t, msgCT, "multipart/form-data")
+	require.Equal(t, "hello", msgContent)
+	require.Contains(t, string(msgBody), string(wantBytes))
+	require.Contains(t, string(msgBody), `name="attachments[]"`)
+	require.Contains(t, string(msgBody), "Content-Type: image/jpeg")
 }
 
 func TestProcessInbound_DocumentMessage_PostsFileNameAndCaption(t *testing.T) {
 	db := setupDB(t)
-	var capturedBody map[string]any
+	wantBytes := []byte("%PDF-fake")
+	mediaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/pdf")
+		_, _ = w.Write(wantBytes)
+	}))
+	defer mediaSrv.Close()
+	var msgCT string
+	var msgBody []byte
+	var msgContent string
 	cwMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.Contains(r.URL.Path, "/messages"):
-			_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+			msgCT = r.Header.Get("Content-Type")
+			msgBody, _ = io.ReadAll(r.Body)
+			msgContent = extractMultipartField(msgBody, "content")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{}`))
 		case strings.Contains(r.URL.Path, "/contacts"):
@@ -357,14 +377,33 @@ func TestProcessInbound_DocumentMessage_PostsFileNameAndCaption(t *testing.T) {
 	body := []byte(`{
 		"key":{"id":"WAID-DOC","remoteJid":"5511999999999@s.whatsapp.net","fromMe":false},
 		"pushName":"Alice",
-		"message":{"documentMessage":{"url":"https://media.example/c.pdf","mimetype":"application/pdf","fileName":"contract.pdf","caption":"sign please"}}
+		"message":{"documentMessage":{"url":"` + mediaSrv.URL + `/c.pdf","mimetype":"application/pdf","fileName":"contract.pdf","caption":"sign please"}}
 	}`)
 	require.NoError(t, s.processInbound(context.Background(), Job{TenantID: tID, Payload: body}))
-	require.Equal(t, "sign please", capturedBody["content"])
-	atts, _ := capturedBody["attachments"].([]any)
-	require.Equal(t, 1, len(atts))
-	first := atts[0].(map[string]any)
-	require.Equal(t, "document", first["file_type"])
+	require.Contains(t, msgCT, "multipart/form-data")
+	require.Equal(t, "sign please", msgContent)
+	require.Contains(t, string(msgBody), string(wantBytes))
+	require.Contains(t, string(msgBody), `filename="contract.pdf"`)
+	require.Contains(t, string(msgBody), "Content-Type: application/pdf")
+}
+
+func extractMultipartField(body []byte, name string) string {
+	marker := []byte(`name="` + name + `"`)
+	idx := bytes.Index(body, marker)
+	if idx < 0 {
+		return ""
+	}
+	rest := body[idx+len(marker):]
+	headerEnd := bytes.Index(rest, []byte("\r\n\r\n"))
+	if headerEnd < 0 {
+		return ""
+	}
+	value := rest[headerEnd+4:]
+	boundaryEnd := bytes.Index(value, []byte("\r\n--"))
+	if boundaryEnd < 0 {
+		return string(value)
+	}
+	return string(value[:boundaryEnd])
 }
 
 func TestHandleWAWebhook_UnknownSlugReturns404(t *testing.T) {

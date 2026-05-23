@@ -68,8 +68,8 @@ func TestParseTenantFlags_AcceptsCompleteSet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "demo", f.slug)
 	require.Equal(t, "https://m", f.megaHost)
-	require.Equal(t, 1, f.cwAccount)
-	require.Equal(t, 2, f.cwInbox)
+	require.Equal(t, int64(1), f.cwAccount)
+	require.Equal(t, int64(2), f.cwInbox)
 	require.False(t, f.skipReachCheck)
 }
 

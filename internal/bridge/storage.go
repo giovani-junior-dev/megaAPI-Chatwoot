@@ -20,8 +20,8 @@ type Tenant struct {
 	MegaAPITokenEnc   []byte
 	ChatwootURL       string
 	ChatwootTokenEnc  []byte
-	ChatwootAccountID int
-	ChatwootInboxID   int
+	ChatwootAccountID int64
+	ChatwootInboxID   int64
 	HMACSecretEnc     []byte
 	WebhookBearerEnc  []byte
 }
@@ -89,8 +89,8 @@ type TenantInsert struct {
 	MegaAPITokenEnc   []byte
 	ChatwootURL       string
 	ChatwootTokenEnc  []byte
-	ChatwootAccountID int
-	ChatwootInboxID   int
+	ChatwootAccountID int64
+	ChatwootInboxID   int64
 	HMACSecretEnc     []byte
 	WebhookBearerEnc  []byte
 }

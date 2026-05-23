@@ -5,6 +5,9 @@ package bridge
 import (
 	"context"
 	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,11 +38,27 @@ func setupDB(t *testing.T) *DB {
 	require.NoError(t, err)
 	t.Cleanup(db.Close)
 
-	body, err := os.ReadFile("../../migrations/0001_init.sql")
-	require.NoError(t, err)
-	_, err = db.Pool.Exec(ctx, string(body))
-	require.NoError(t, err)
+	applyAllMigrations(t, ctx, db)
 	return db
+}
+
+func applyAllMigrations(t *testing.T, ctx context.Context, db *DB) {
+	t.Helper()
+	entries, err := os.ReadDir("../../migrations")
+	require.NoError(t, err)
+	var files []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") {
+			files = append(files, e.Name())
+		}
+	}
+	sort.Strings(files)
+	for _, name := range files {
+		body, err := os.ReadFile(filepath.Join("../../migrations", name))
+		require.NoError(t, err)
+		_, err = db.Pool.Exec(ctx, string(body))
+		require.NoError(t, err, "migration %s", name)
+	}
 }
 
 func TestGetTenantBySlug_NotFoundError(t *testing.T) {
@@ -61,6 +80,23 @@ func TestInsertTenant_RoundTrip(t *testing.T) {
 	got, err := db.GetTenantBySlug(ctx, "demo")
 	require.NoError(t, err)
 	require.Equal(t, id, got.ID)
+}
+
+func TestInsertTenant_AcceptsLargeChatwootIDs(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	bigID := int64(3_000_000_000)
+	_, err := db.InsertTenant(ctx, TenantInsert{
+		Slug: "bigids", MegaAPIHost: "https://x", MegaAPIInstance: "i",
+		MegaAPITokenEnc: []byte("a"), ChatwootURL: "https://c", ChatwootTokenEnc: []byte("b"),
+		ChatwootAccountID: bigID, ChatwootInboxID: bigID + 1,
+		HMACSecretEnc: []byte("h"), WebhookBearerEnc: []byte("w"),
+	})
+	require.NoError(t, err)
+	got, err := db.GetTenantBySlug(ctx, "bigids")
+	require.NoError(t, err)
+	require.Equal(t, bigID, got.ChatwootAccountID)
+	require.Equal(t, bigID+1, got.ChatwootInboxID)
 }
 
 func TestUpsertContact_CreatesNewAndUpdates(t *testing.T) {

@@ -191,7 +191,7 @@ func cmdTenant(ctx context.Context, log zerolog.Logger, args []string) error {
 type tenantFlags struct {
 	slug, megaHost, megaInstance, megaToken string
 	cwURL, cwToken                          string
-	cwAccount, cwInbox                      int
+	cwAccount, cwInbox                      int64
 	skipReachCheck                          bool
 }
 
@@ -204,8 +204,8 @@ func parseTenantFlags(args []string) (tenantFlags, error) {
 	fs.StringVar(&f.megaToken, "megaapi-token", "", "megaAPI bearer token")
 	fs.StringVar(&f.cwURL, "chatwoot-url", "", "Chatwoot base URL")
 	fs.StringVar(&f.cwToken, "chatwoot-token", "", "Chatwoot api_access_token")
-	fs.IntVar(&f.cwAccount, "chatwoot-account", 0, "Chatwoot account id")
-	fs.IntVar(&f.cwInbox, "chatwoot-inbox", 0, "Chatwoot inbox id")
+	fs.Int64Var(&f.cwAccount, "chatwoot-account", 0, "Chatwoot account id")
+	fs.Int64Var(&f.cwInbox, "chatwoot-inbox", 0, "Chatwoot inbox id")
 	fs.BoolVar(&f.skipReachCheck, "skip-reach-check", false, "skip HEAD reachability check (test/dev)")
 	if err := fs.Parse(args); err != nil {
 		return f, err
