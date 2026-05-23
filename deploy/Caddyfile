@@ -1,0 +1,28 @@
+# Caddy reverse proxy for chatwoot-megaapi-bridge admin UI.
+# Replace {$BRIDGE_DOMAIN} and {$BRIDGE_UPSTREAM} via env or edit literals.
+
+{$BRIDGE_DOMAIN} {
+    encode zstd gzip
+
+    header {
+        # HSTS — force HTTPS for the next 2 years incl. subdomains; allow preload.
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+
+        # Anti-clickjacking
+        X-Frame-Options "DENY"
+
+        # CSP — admin UI loads htmx/alpine/tailwind from unpkg + cdn.tailwindcss.com.
+        # Tighten allowed origins when you self-host the assets.
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://unpkg.com https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
+        # Defense-in-depth
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+
+        # Hide upstream signature
+        -Server
+    }
+
+    reverse_proxy {$BRIDGE_UPSTREAM:bridge:8080}
+}
