@@ -28,6 +28,9 @@ type Deps struct {
 	GetTenant       func(context.Context, string) (bridge.Tenant, error)
 	PingDB          func(context.Context) error
 	HeadOK          func(context.Context, string) bool
+	ListMessages    func(context.Context, string, int, int) ([]bridge.Message, error)
+	ListFailed      func(context.Context, int) ([]bridge.Message, error)
+	RequeueMessage  func(context.Context, uuid.UUID) (bridge.Message, error)
 	Key             []byte
 }
 
@@ -55,6 +58,9 @@ func NewFromDB(db *bridge.DB, key []byte) (*Handler, error) {
 		GetTenant:       db.GetTenantBySlug,
 		PingDB:          db.Pool.Ping,
 		HeadOK:          HeadOK,
+		ListMessages:    db.MessagesByTenantSlug,
+		ListFailed:      db.FailedMessages,
+		RequeueMessage:  db.RequeueMessage,
 		Key:             key,
 	})
 }
@@ -72,6 +78,7 @@ func (h *Handler) Routes() http.Handler {
 	r.Get("/tenants/new", h.handleTenantNew)
 	r.Post("/tenants", h.handleTenantCreate)
 	r.Get("/tenants/{slug}/diag", h.handleDiag)
+	r.Get("/messages", h.handleMessages)
 	return r
 }
 

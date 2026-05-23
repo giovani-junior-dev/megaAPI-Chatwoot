@@ -1,0 +1,43 @@
+{{define "content"}}
+{{with .Data}}
+<section class="space-y-4">
+  <h1 class="text-2xl font-semibold">Mensagens</h1>
+  <form method="get" action="/messages" class="flex gap-2">
+    <input name="tenant" value="{{.Tenant}}" placeholder="slug do tenant"
+           class="border rounded px-3 py-2 text-sm flex-1">
+    <button class="bg-slate-900 text-white px-4 py-2 rounded text-sm">Filtrar</button>
+  </form>
+  {{if .Items}}
+  <table class="w-full text-sm bg-white border rounded">
+    <thead class="bg-slate-100">
+      <tr>
+        <th class="text-left px-3 py-2">Quando</th>
+        <th class="text-left px-3 py-2">Direção</th>
+        <th class="text-left px-3 py-2">Status</th>
+        <th class="text-left px-3 py-2">External ID</th>
+        <th class="text-right px-3 py-2">Tentativas</th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range .Items}}
+      <tr class="border-t">
+        <td class="px-3 py-2">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+        <td class="px-3 py-2">{{.Direction}}</td>
+        <td class="px-3 py-2">{{.Status}}</td>
+        <td class="px-3 py-2 font-mono text-xs">{{.ExternalID}}</td>
+        <td class="px-3 py-2 text-right">{{.Attempts}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  <nav class="flex gap-3 text-sm">
+    {{if .HasPrev}}<a href="/messages?tenant={{.Tenant}}&page={{.PrevPage}}" class="underline">« anterior</a>{{end}}
+    <span>página {{.Page}}</span>
+    {{if .HasNext}}<a href="/messages?tenant={{.Tenant}}&page={{.NextPage}}" class="underline">próximo »</a>{{end}}
+  </nav>
+  {{else}}
+  <p class="text-slate-600">Informe um tenant para listar mensagens.</p>
+  {{end}}
+</section>
+{{end}}
+{{end}}

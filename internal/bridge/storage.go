@@ -278,6 +278,31 @@ FROM tenants t LEFT JOIN (
 	return out, rows.Err()
 }
 
+func (d *DB) MessagesByTenantSlug(ctx context.Context, slug string, limit, offset int) ([]Message, error) {
+	if limit <= 0 {
+		limit = 25
+	}
+	const q = `SELECT m.id, m.tenant_id, m.direction, m.external_id, m.status, m.attempts,
+COALESCE(m.last_error,''), m.payload, m.created_at FROM messages m
+JOIN tenants t ON t.id = m.tenant_id WHERE t.slug = $1
+ORDER BY m.created_at DESC LIMIT $2 OFFSET $3`
+	rows, err := d.Pool.Query(ctx, q, slug, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Message
+	for rows.Next() {
+		var m Message
+		if err := rows.Scan(&m.ID, &m.TenantID, &m.Direction, &m.ExternalID,
+			&m.Status, &m.Attempts, &m.LastError, &m.Payload, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 func (d *DB) NextPending(ctx context.Context, limit int) ([]Message, error) {
 	const q = `SELECT id, tenant_id, direction, external_id, status, attempts,
 COALESCE(last_error,''), payload, created_at FROM messages
