@@ -17,10 +17,11 @@ const (
 )
 
 type Deps struct {
-	GetAdmin   func(context.Context, string) (bridge.Admin, error)
-	GetSetting func(context.Context, string) (string, error)
-	SetSetting func(context.Context, string, string) error
-	Key        []byte
+	GetAdmin      func(context.Context, string) (bridge.Admin, error)
+	GetSetting    func(context.Context, string) (string, error)
+	SetSetting    func(context.Context, string, string) error
+	FetchInboxes  func(context.Context, discoverReq) ([]Inbox, error)
+	Key           []byte
 }
 
 type Handler struct {
@@ -54,6 +55,7 @@ func (h *Handler) Routes() http.Handler {
 	r.Post("/logout", h.handleLogout)
 	r.Get("/settings", h.handleSettings)
 	r.Post("/settings/base_url", h.handleSettingsBaseURL)
+	r.Post("/tenants/discover-inboxes", h.handleDiscoverInboxes)
 	return r
 }
 
