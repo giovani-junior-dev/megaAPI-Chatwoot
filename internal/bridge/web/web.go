@@ -18,13 +18,14 @@ const (
 )
 
 type Deps struct {
-	GetAdmin      func(context.Context, string) (bridge.Admin, error)
-	GetSetting    func(context.Context, string) (string, error)
-	SetSetting    func(context.Context, string, string) error
-	FetchInboxes  func(context.Context, discoverReq) ([]Inbox, error)
-	InsertTenant  func(context.Context, bridge.TenantInsert) (uuid.UUID, error)
-	ConfigWebhook func(context.Context, MegaAPIWebhookConfig) error
-	Key           []byte
+	GetAdmin        func(context.Context, string) (bridge.Admin, error)
+	GetSetting      func(context.Context, string) (string, error)
+	SetSetting      func(context.Context, string, string) error
+	FetchInboxes    func(context.Context, discoverReq) ([]Inbox, error)
+	InsertTenant    func(context.Context, bridge.TenantInsert) (uuid.UUID, error)
+	ConfigWebhook   func(context.Context, MegaAPIWebhookConfig) error
+	TenantSummaries func(context.Context) ([]bridge.TenantSummary, error)
+	Key             []byte
 }
 
 type Handler struct {
@@ -42,12 +43,13 @@ func New(d Deps) (*Handler, error) {
 
 func NewFromDB(db *bridge.DB, key []byte) (*Handler, error) {
 	return New(Deps{
-		GetAdmin:      db.GetAdmin,
-		GetSetting:    db.GetSetting,
-		SetSetting:    db.SetSetting,
-		InsertTenant:  db.InsertTenant,
-		ConfigWebhook: ConfigureMegaAPIWebhook,
-		Key:           key,
+		GetAdmin:        db.GetAdmin,
+		GetSetting:      db.GetSetting,
+		SetSetting:      db.SetSetting,
+		InsertTenant:    db.InsertTenant,
+		ConfigWebhook:   ConfigureMegaAPIWebhook,
+		TenantSummaries: db.TenantSummaries,
+		Key:             key,
 	})
 }
 
@@ -66,8 +68,14 @@ func (h *Handler) Routes() http.Handler {
 	return r
 }
 
-func (h *Handler) handleIndex(w http.ResponseWriter, _ *http.Request) {
-	h.render(w, "index.html", page{Title: "Painel"})
+func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
+	var summaries []bridge.TenantSummary
+	if h.deps.TenantSummaries != nil {
+		if s, err := h.deps.TenantSummaries(r.Context()); err == nil {
+			summaries = s
+		}
+	}
+	h.render(w, "index.html", page{Title: "Painel", Data: summaries})
 }
 
 type page struct {

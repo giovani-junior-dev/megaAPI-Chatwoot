@@ -251,6 +251,33 @@ RETURNING id, tenant_id, direction, external_id, status, attempts,
 	return m, err
 }
 
+type TenantSummary struct {
+	Slug      string
+	Count24h  int64
+}
+
+func (d *DB) TenantSummaries(ctx context.Context) ([]TenantSummary, error) {
+	const q = `SELECT t.slug, COALESCE(c.cnt, 0)
+FROM tenants t LEFT JOIN (
+  SELECT tenant_id, COUNT(*) cnt FROM messages
+  WHERE created_at > now() - interval '24 hours' GROUP BY tenant_id
+) c ON c.tenant_id = t.id ORDER BY t.slug`
+	rows, err := d.Pool.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TenantSummary
+	for rows.Next() {
+		var s TenantSummary
+		if err := rows.Scan(&s.Slug, &s.Count24h); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
 func (d *DB) NextPending(ctx context.Context, limit int) ([]Message, error) {
 	const q = `SELECT id, tenant_id, direction, external_id, status, attempts,
 COALESCE(last_error,''), payload, created_at FROM messages
