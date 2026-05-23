@@ -168,6 +168,45 @@ func (d *DB) IncrementAttempts(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+func (d *DB) FailedMessages(ctx context.Context, limit int) ([]Message, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	const q = `SELECT id, tenant_id, direction, external_id, status, attempts,
+COALESCE(last_error,''), payload, created_at FROM messages
+WHERE status = 'failed' ORDER BY created_at DESC LIMIT $1`
+	rows, err := d.Pool.Query(ctx, q, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Message
+	for rows.Next() {
+		var m Message
+		if err := rows.Scan(&m.ID, &m.TenantID, &m.Direction, &m.ExternalID,
+			&m.Status, &m.Attempts, &m.LastError, &m.Payload, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func (d *DB) RequeueMessage(ctx context.Context, id uuid.UUID) (Message, error) {
+	const q = `UPDATE messages
+SET status = 'pending', attempts = 0, last_error = NULL
+WHERE id = $1 AND status = 'failed'
+RETURNING id, tenant_id, direction, external_id, status, attempts,
+  COALESCE(last_error,''), payload, created_at`
+	var m Message
+	err := d.Pool.QueryRow(ctx, q, id).Scan(&m.ID, &m.TenantID, &m.Direction,
+		&m.ExternalID, &m.Status, &m.Attempts, &m.LastError, &m.Payload, &m.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Message{}, ErrNotFound
+	}
+	return m, err
+}
+
 func (d *DB) NextPending(ctx context.Context, limit int) ([]Message, error) {
 	const q = `SELECT id, tenant_id, direction, external_id, status, attempts,
 COALESCE(last_error,''), payload, created_at FROM messages

@@ -130,6 +130,7 @@ func loadServerConfig() bridge.Config {
 	if v, err := strconv.Atoi(getEnv("WORKERS", "")); err == nil && v >= 0 {
 		cfg.Workers = v
 	}
+	cfg.AdminToken = os.Getenv("ADMIN_TOKEN")
 	return cfg
 }
 

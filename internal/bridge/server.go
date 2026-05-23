@@ -41,6 +41,7 @@ func (s *Server) queueAtCapacity() bool {
 type Config struct {
 	BufferLimit int
 	Workers     int
+	AdminToken  string
 }
 
 type Server struct {
@@ -75,6 +76,8 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/healthz", s.handleHealth)
 	r.Get("/readyz", s.handleReady)
 	r.Get("/metrics", s.handleMetrics)
+	r.Get("/admin/failed", s.handleAdminFailed)
+	r.Post("/admin/retry/{id}", s.handleAdminRetry)
 	r.Post("/v1/wa/{slug}", s.handleWAWebhook)
 	r.Post("/v1/cw/{slug}", s.handleCWWebhook)
 	return r
