@@ -115,6 +115,7 @@ func cmdServe(ctx context.Context, log zerolog.Logger) error {
 		log.Warn().Err(err).Msg("recover pending failed")
 	}
 	go srv.RunWorkers(ctx)
+	go srv.RunStaleJanitor(ctx)
 	return runHTTP(ctx, log, srv)
 }
 

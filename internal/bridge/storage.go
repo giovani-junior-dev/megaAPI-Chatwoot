@@ -146,6 +146,16 @@ RETURNING id`
 	return id, true, nil
 }
 
+func (d *DB) SweepStale(ctx context.Context, age time.Duration) (int64, error) {
+	const q = `UPDATE messages SET status = 'failed', last_error = 'stale: pending beyond ' || $1
+WHERE status = 'pending' AND created_at < NOW() - $2::interval`
+	tag, err := d.Pool.Exec(ctx, q, age.String(), age.String())
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 func (d *DB) MarkStatus(ctx context.Context, id uuid.UUID, status, lastErr string) error {
 	const q = `UPDATE messages SET status = $2, last_error = NULLIF($3,'') WHERE id = $1`
 	_, err := d.Pool.Exec(ctx, q, id, status, lastErr)

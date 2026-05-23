@@ -140,6 +140,44 @@ func TestNextPending_OrdersByCreatedAt(t *testing.T) {
 	require.Equal(t, "a", pending[0].ExternalID)
 }
 
+func TestSweepStale_MarksOldPendingAsFailed(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	tid := makeTenant(t, db)
+	idStale, _, err := db.InsertMessage(ctx, Message{TenantID: tid, Direction: "in", ExternalID: "stale", Payload: []byte(`{}`)})
+	require.NoError(t, err)
+	idFresh, _, err := db.InsertMessage(ctx, Message{TenantID: tid, Direction: "in", ExternalID: "fresh", Payload: []byte(`{}`)})
+	require.NoError(t, err)
+	_, err = db.Pool.Exec(ctx, `UPDATE messages SET created_at = NOW() - INTERVAL '2 hours' WHERE id = $1`, idStale)
+	require.NoError(t, err)
+
+	n, err := db.SweepStale(ctx, time.Hour)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), n)
+
+	var stStale, errStale string
+	require.NoError(t, db.Pool.QueryRow(ctx,
+		`SELECT status, COALESCE(last_error,'') FROM messages WHERE id = $1`, idStale).Scan(&stStale, &errStale))
+	require.Equal(t, "failed", stStale)
+	require.Contains(t, errStale, "stale")
+
+	var stFresh string
+	require.NoError(t, db.Pool.QueryRow(ctx,
+		`SELECT status FROM messages WHERE id = $1`, idFresh).Scan(&stFresh))
+	require.Equal(t, "pending", stFresh)
+}
+
+func TestSweepStale_NoOpWhenNothingStale(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	tid := makeTenant(t, db)
+	_, _, err := db.InsertMessage(ctx, Message{TenantID: tid, Direction: "in", ExternalID: "x", Payload: []byte(`{}`)})
+	require.NoError(t, err)
+	n, err := db.SweepStale(ctx, time.Hour)
+	require.NoError(t, err)
+	require.Equal(t, int64(0), n)
+}
+
 func TestMarkStatus_AndIncrementAttempts(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()

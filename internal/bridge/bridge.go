@@ -97,6 +97,31 @@ func (s *Server) runJob(ctx context.Context, job Job,
 	}
 }
 
+const (
+	staleSweepInterval = 5 * time.Minute
+	staleSweepAge      = time.Hour
+)
+
+func (s *Server) RunStaleJanitor(ctx context.Context) {
+	t := time.NewTicker(staleSweepInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			n, err := s.DB.SweepStale(ctx, staleSweepAge)
+			if err != nil {
+				s.Log.Err(err).Msg("stale janitor sweep failed")
+				continue
+			}
+			if n > 0 {
+				s.Log.Warn().Int64("count", n).Msg("stale janitor marked pending messages as failed")
+			}
+		}
+	}
+}
+
 func (s *Server) RecoverPending(ctx context.Context) error {
 	msgs, err := s.DB.NextPending(ctx, s.Cfg.BufferLimit*2)
 	if err != nil {
