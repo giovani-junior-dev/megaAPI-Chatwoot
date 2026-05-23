@@ -192,6 +192,59 @@ func TestMarkStatus_AndIncrementAttempts(t *testing.T) {
 	require.Len(t, pending, 0)
 }
 
+func TestUpsertAdmin_RoundTrip(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	err := db.UpsertAdmin(ctx, "admin@example.com", "hash-v1")
+	require.NoError(t, err)
+	got, err := db.GetAdmin(ctx, "admin@example.com")
+	require.NoError(t, err)
+	require.Equal(t, "admin@example.com", got.Email)
+	require.Equal(t, "hash-v1", got.PasswordHash)
+}
+
+func TestUpsertAdmin_OverwritesPasswordHash(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	require.NoError(t, db.UpsertAdmin(ctx, "a@x.com", "h1"))
+	require.NoError(t, db.UpsertAdmin(ctx, "a@x.com", "h2"))
+	got, err := db.GetAdmin(ctx, "a@x.com")
+	require.NoError(t, err)
+	require.Equal(t, "h2", got.PasswordHash)
+}
+
+func TestGetAdmin_NotFound(t *testing.T) {
+	db := setupDB(t)
+	_, err := db.GetAdmin(context.Background(), "missing@x.com")
+	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestSetSetting_GetSetting_RoundTrip(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	require.NoError(t, db.SetSetting(ctx, "base_url", "https://bridge.example.com"))
+	v, err := db.GetSetting(ctx, "base_url")
+	require.NoError(t, err)
+	require.Equal(t, "https://bridge.example.com", v)
+}
+
+func TestSetSetting_Overwrites(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	require.NoError(t, db.SetSetting(ctx, "base_url", "v1"))
+	require.NoError(t, db.SetSetting(ctx, "base_url", "v2"))
+	v, err := db.GetSetting(ctx, "base_url")
+	require.NoError(t, err)
+	require.Equal(t, "v2", v)
+}
+
+func TestGetSetting_MissingReturnsEmptyString(t *testing.T) {
+	db := setupDB(t)
+	v, err := db.GetSetting(context.Background(), "absent")
+	require.NoError(t, err)
+	require.Equal(t, "", v)
+}
+
 func makeTenant(t *testing.T, db *DB) uuid.UUID {
 	t.Helper()
 	id, err := db.InsertTenant(context.Background(), TenantInsert{

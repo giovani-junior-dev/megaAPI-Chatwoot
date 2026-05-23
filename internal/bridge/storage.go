@@ -34,6 +34,14 @@ type Contact struct {
 	UpdatedAt        time.Time
 }
 
+type Admin struct {
+	ID           uuid.UUID
+	Email        string
+	PasswordHash string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 type Message struct {
 	ID         uuid.UUID
 	TenantID   uuid.UUID
@@ -144,6 +152,42 @@ RETURNING id`
 		return uuid.Nil, false, err
 	}
 	return id, true, nil
+}
+
+func (d *DB) UpsertAdmin(ctx context.Context, email, passwordHash string) error {
+	const q = `INSERT INTO admins (email, password_hash)
+VALUES ($1, $2)
+ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, updated_at = now()`
+	_, err := d.Pool.Exec(ctx, q, email, passwordHash)
+	return err
+}
+
+func (d *DB) GetAdmin(ctx context.Context, email string) (Admin, error) {
+	const q = `SELECT id, email, password_hash, created_at, updated_at FROM admins WHERE email = $1`
+	var a Admin
+	err := d.Pool.QueryRow(ctx, q, email).Scan(&a.ID, &a.Email, &a.PasswordHash, &a.CreatedAt, &a.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Admin{}, ErrNotFound
+	}
+	return a, err
+}
+
+func (d *DB) SetSetting(ctx context.Context, key, value string) error {
+	const q = `INSERT INTO settings (key, value)
+VALUES ($1, $2)
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`
+	_, err := d.Pool.Exec(ctx, q, key, value)
+	return err
+}
+
+func (d *DB) GetSetting(ctx context.Context, key string) (string, error) {
+	const q = `SELECT value FROM settings WHERE key = $1`
+	var v string
+	err := d.Pool.QueryRow(ctx, q, key).Scan(&v)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return v, err
 }
 
 func (d *DB) SweepStale(ctx context.Context, age time.Duration) (int64, error) {
