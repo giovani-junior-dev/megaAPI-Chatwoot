@@ -25,6 +25,9 @@ type Deps struct {
 	InsertTenant    func(context.Context, bridge.TenantInsert) (uuid.UUID, error)
 	ConfigWebhook   func(context.Context, MegaAPIWebhookConfig) error
 	TenantSummaries func(context.Context) ([]bridge.TenantSummary, error)
+	GetTenant       func(context.Context, string) (bridge.Tenant, error)
+	PingDB          func(context.Context) error
+	HeadOK          func(context.Context, string) bool
 	Key             []byte
 }
 
@@ -49,6 +52,9 @@ func NewFromDB(db *bridge.DB, key []byte) (*Handler, error) {
 		InsertTenant:    db.InsertTenant,
 		ConfigWebhook:   ConfigureMegaAPIWebhook,
 		TenantSummaries: db.TenantSummaries,
+		GetTenant:       db.GetTenantBySlug,
+		PingDB:          db.Pool.Ping,
+		HeadOK:          HeadOK,
 		Key:             key,
 	})
 }
@@ -65,6 +71,7 @@ func (h *Handler) Routes() http.Handler {
 	r.Post("/tenants/discover-inboxes", h.handleDiscoverInboxes)
 	r.Get("/tenants/new", h.handleTenantNew)
 	r.Post("/tenants", h.handleTenantCreate)
+	r.Get("/tenants/{slug}/diag", h.handleDiag)
 	return r
 }
 
