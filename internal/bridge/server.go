@@ -17,13 +17,26 @@ import (
 )
 
 const (
-	maxBodyBytes  = 1 << 20
-	directionIn   = "in"
-	directionOut  = "out"
-	hmacHeader    = "X-Chatwoot-Signature"
-	bearerPrefix  = "Bearer "
-	defaultBuffer = 1000
+	maxBodyBytes        = 1 << 20
+	directionIn         = "in"
+	directionOut        = "out"
+	hmacHeader          = "X-Chatwoot-Signature"
+	bearerPrefix        = "Bearer "
+	defaultBuffer       = 1000
+	readyQueueThreshold = 80 // percent of BufferLimit that flips /readyz to 503
 )
+
+func atCapacity(used, limit int) bool {
+	if limit <= 0 {
+		return false
+	}
+	return used*100 >= limit*readyQueueThreshold
+}
+
+func (s *Server) queueAtCapacity() bool {
+	return atCapacity(len(s.Inbox), s.Cfg.BufferLimit) ||
+		atCapacity(len(s.Outbox), s.Cfg.BufferLimit)
+}
 
 type Config struct {
 	BufferLimit int
@@ -73,8 +86,8 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"db": "down"})
 		return
 	}
-	if len(s.Inbox) >= s.Cfg.BufferLimit || len(s.Outbox) >= s.Cfg.BufferLimit {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"queue": "full"})
+	if s.queueAtCapacity() {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"queue": "near_full"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

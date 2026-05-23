@@ -114,6 +114,53 @@ func TestChatwootShouldRelay_WrongEventReturnsFalse(t *testing.T) {
 	require.False(t, chatwootShouldRelay([]byte(`{"event":"conversation_status_changed","message_type":"outgoing","private":false}`)))
 }
 
+func TestAtCapacity_ThresholdIs80Percent(t *testing.T) {
+	cases := []struct {
+		used, limit int
+		want        bool
+	}{
+		{used: 0, limit: 10, want: false},
+		{used: 7, limit: 10, want: false},
+		{used: 8, limit: 10, want: true},
+		{used: 10, limit: 10, want: true},
+		{used: 79, limit: 100, want: false},
+		{used: 80, limit: 100, want: true},
+		{used: 4, limit: 5, want: true},
+		{used: 3, limit: 5, want: false},
+		{used: 5, limit: 0, want: false},
+	}
+	for _, c := range cases {
+		require.Equal(t, c.want, atCapacity(c.used, c.limit),
+			"atCapacity(%d, %d)", c.used, c.limit)
+	}
+}
+
+func TestQueueAtCapacity_TripsAt80PercentInbox(t *testing.T) {
+	s := &Server{
+		Inbox:  make(chan Job, 10),
+		Outbox: make(chan Job, 10),
+		Cfg:    Config{BufferLimit: 10},
+	}
+	for i := 0; i < 7; i++ {
+		s.Inbox <- Job{}
+	}
+	require.False(t, s.queueAtCapacity(), "7/10 below 80%%")
+	s.Inbox <- Job{}
+	require.True(t, s.queueAtCapacity(), "8/10 reaches 80%%")
+}
+
+func TestQueueAtCapacity_TripsAt80PercentOutbox(t *testing.T) {
+	s := &Server{
+		Inbox:  make(chan Job, 10),
+		Outbox: make(chan Job, 10),
+		Cfg:    Config{BufferLimit: 10},
+	}
+	for i := 0; i < 8; i++ {
+		s.Outbox <- Job{}
+	}
+	require.True(t, s.queueAtCapacity(), "outbox at 80%% triggers")
+}
+
 func TestReadyz_ReturnsOKWhenDBAndQueueHealthy(t *testing.T) {
 	// Sanity coverage for the happy path that integration tests skip:
 	// we exercise the response shape without a real DB by hitting only
