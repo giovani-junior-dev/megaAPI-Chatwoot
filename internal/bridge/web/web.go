@@ -79,6 +79,8 @@ func (h *Handler) Routes() http.Handler {
 	r.Post("/tenants", h.handleTenantCreate)
 	r.Get("/tenants/{slug}/diag", h.handleDiag)
 	r.Get("/messages", h.handleMessages)
+	r.Get("/dlq", h.handleDLQ)
+	r.Post("/dlq/retry/{id}", h.handleDLQRetry)
 	return r
 }
 

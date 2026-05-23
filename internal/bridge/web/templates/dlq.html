@@ -1,0 +1,35 @@
+{{define "content"}}
+<section class="space-y-4">
+  <h1 class="text-2xl font-semibold">DLQ — mensagens falhas</h1>
+  {{if .Data}}
+  <table class="w-full text-sm bg-white border rounded">
+    <thead class="bg-slate-100">
+      <tr>
+        <th class="text-left px-3 py-2">Quando</th>
+        <th class="text-left px-3 py-2">Direção</th>
+        <th class="text-left px-3 py-2">External ID</th>
+        <th class="text-left px-3 py-2">Último erro</th>
+        <th class="text-right px-3 py-2"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range .Data}}
+      <tr class="border-t">
+        <td class="px-3 py-2">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+        <td class="px-3 py-2">{{.Direction}}</td>
+        <td class="px-3 py-2 font-mono text-xs">{{.ExternalID}}</td>
+        <td class="px-3 py-2 text-xs text-red-700">{{.LastError}}</td>
+        <td class="px-3 py-2 text-right">
+          <form method="post" action="/dlq/retry/{{.ID}}">
+            <button class="bg-slate-900 text-white px-3 py-1 rounded text-xs">Retry</button>
+          </form>
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="text-slate-600">DLQ vazia.</p>
+  {{end}}
+</section>
+{{end}}
