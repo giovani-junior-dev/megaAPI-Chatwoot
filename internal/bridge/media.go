@@ -32,6 +32,9 @@ func (s *Server) prepareMedia(ctx context.Context, att Attachment) (Attachment, 
 	if att.Kind == "image" && isHEIC(att.MimeType, att.FileName, att.URL) {
 		return att, notRetriable(fmt.Errorf("HEIC images not supported by WhatsApp — please convert to JPEG/PNG before sending"))
 	}
+	if att.Kind == "image" && isGIF(att.MimeType, att.FileName, att.URL) {
+		return att, notRetriable(fmt.Errorf("GIF not supported by WhatsApp as image — convert to MP4 before sending (WhatsApp uses MP4 with gifPlayback for animated content)"))
+	}
 	mime, ext := probeMedia(ctx, att)
 	if att.Kind == "audio" {
 		if !isAcceptedAudio(mime, ext) {
@@ -124,6 +127,26 @@ func firstNonEmpty(ss ...string) string {
 		}
 	}
 	return ""
+}
+
+func isGIF(mime, name, rawURL string) bool {
+	m := strings.ToLower(mime)
+	if strings.Contains(m, "gif") {
+		return true
+	}
+	for _, s := range []string{strings.ToLower(name), strings.ToLower(stripQuery(rawURL))} {
+		if strings.HasSuffix(s, ".gif") {
+			return true
+		}
+	}
+	return false
+}
+
+func stripQuery(u string) string {
+	if i := strings.Index(u, "?"); i >= 0 {
+		return u[:i]
+	}
+	return u
 }
 
 func isHEIC(mime, name, rawURL string) bool {

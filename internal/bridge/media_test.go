@@ -169,6 +169,33 @@ func TestPrepareMedia_VideoMovRejected(t *testing.T) {
 	require.Contains(t, err.Error(), "video format")
 }
 
+func TestPrepareMedia_GifRejected(t *testing.T) {
+	s := &Server{}
+	for _, tc := range []struct{ mime, name, url string }{
+		{"image/gif", "", ""},
+		{"", "tenor.gif", ""},
+		{"", "", "https://giphy.com/dance.gif"},
+		{"", "", "https://x/anim.gif?token=abc"},
+	} {
+		_, err := s.prepareMedia(context.Background(), Attachment{
+			Kind: "image", MimeType: tc.mime, FileName: tc.name, URL: tc.url,
+		})
+		require.Error(t, err, "case mime=%s name=%s url=%s", tc.mime, tc.name, tc.url)
+		var fe fatalError
+		require.True(t, errors.As(err, &fe))
+		require.Contains(t, err.Error(), "GIF not supported")
+	}
+}
+
+func TestIsGIF(t *testing.T) {
+	require.True(t, isGIF("image/gif", "", ""))
+	require.True(t, isGIF("", "anim.GIF", ""))
+	require.True(t, isGIF("", "", "https://x/y.gif"))
+	require.True(t, isGIF("", "", "https://x/y.gif?token=abc"))
+	require.False(t, isGIF("image/jpeg", "photo.jpg", "https://x/y.jpg"))
+	require.False(t, isGIF("", "", ""))
+}
+
 func TestIsAcceptedVideo(t *testing.T) {
 	require.True(t, isAcceptedVideo("video/mp4", ""))
 	require.True(t, isAcceptedVideo("", "mp4"))
