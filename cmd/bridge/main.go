@@ -28,6 +28,7 @@ Usage:
   bridge serve         Run the HTTP server and worker pools
   bridge migrate       Apply embedded migrations
   bridge tenant add    Register a new tenant
+  bridge admin add     Create/replace the admin login
 `
 
 func main() {
@@ -53,6 +54,8 @@ func dispatch(ctx context.Context, log zerolog.Logger, cmd string, args []string
 		return cmdMigrate(ctx, log)
 	case "tenant":
 		return cmdTenant(ctx, log, args)
+	case "admin":
+		return cmdAdmin(ctx, log, args)
 	case "-h", "--help", "help":
 		fmt.Fprint(os.Stdout, usage)
 		return nil
@@ -112,7 +115,7 @@ func cmdServe(ctx context.Context, log zerolog.Logger) error {
 	}
 	defer db.Close()
 	srv := bridge.NewServer(db, key, loadServerConfig(), log)
-	wh, err := web.New(web.Deps{DB: db})
+	wh, err := web.NewFromDB(db, key)
 	if err != nil {
 		return err
 	}

@@ -1,16 +1,24 @@
 package web
 
 import (
+	"context"
 	"html/template"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/madeinlowcode/chatwoot-megaapi-bridge/internal/bridge"
 )
 
+const (
+	cookieName = "bridge_session"
+	sessionTTL = 8 * time.Hour
+)
+
 type Deps struct {
-	DB *bridge.DB
+	GetAdmin func(context.Context, string) (bridge.Admin, error)
+	Key      []byte
 }
 
 type Handler struct {
@@ -26,9 +34,20 @@ func New(d Deps) (*Handler, error) {
 	return &Handler{deps: d, tpl: tpl}, nil
 }
 
+func NewFromDB(db *bridge.DB, key []byte) (*Handler, error) {
+	return New(Deps{
+		GetAdmin: db.GetAdmin,
+		Key:      key,
+	})
+}
+
 func (h *Handler) Routes() http.Handler {
 	r := chi.NewRouter()
+	r.Use(h.requireAuth)
 	r.Get("/", h.handleIndex)
+	r.Get("/login", h.handleLoginForm)
+	r.Post("/login", h.handleLoginSubmit)
+	r.Post("/logout", h.handleLogout)
 	return r
 }
 
@@ -38,6 +57,7 @@ func (h *Handler) handleIndex(w http.ResponseWriter, _ *http.Request) {
 
 type page struct {
 	Title string
+	Error string
 	Data  any
 }
 
