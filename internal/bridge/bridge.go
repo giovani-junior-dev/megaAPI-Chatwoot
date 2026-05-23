@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"runtime"
@@ -24,6 +25,16 @@ type Job struct {
 }
 
 var retryBackoff = []time.Duration{time.Second, 5 * time.Second, 30 * time.Second}
+
+// jitterBackoff returns d perturbed by ±25% to avoid thundering-herd retries
+// when many jobs fail at the same instant.
+func jitterBackoff(d time.Duration) time.Duration {
+	if d <= 0 {
+		return 0
+	}
+	factor := 0.75 + rand.Float64()*0.5
+	return time.Duration(float64(d) * factor)
+}
 
 func (s *Server) RunWorkers(ctx context.Context) {
 	n := s.Cfg.Workers
@@ -62,7 +73,7 @@ func runRetryLoop(ctx context.Context, backoffs []time.Duration, attempt func() 
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(backoffs[i-1]):
+			case <-time.After(jitterBackoff(backoffs[i-1])):
 			}
 		}
 		if err = attempt(); err == nil {

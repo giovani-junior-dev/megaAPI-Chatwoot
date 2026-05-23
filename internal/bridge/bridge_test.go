@@ -233,6 +233,30 @@ func TestRunRetryLoop_RetriableThenSuccess(t *testing.T) {
 	require.Equal(t, int32(3), calls.Load())
 }
 
+func TestJitterBackoff_StaysWithin25Percent(t *testing.T) {
+	const base = 100 * time.Millisecond
+	min := time.Duration(float64(base) * 0.75)
+	max := time.Duration(float64(base) * 1.25)
+	var sum time.Duration
+	const samples = 500
+	distinct := map[time.Duration]struct{}{}
+	for i := 0; i < samples; i++ {
+		d := jitterBackoff(base)
+		require.GreaterOrEqual(t, d, min, "jitter went below -25%%")
+		require.LessOrEqual(t, d, max, "jitter went above +25%%")
+		distinct[d] = struct{}{}
+		sum += d
+	}
+	require.Greater(t, len(distinct), 50, "jitter must vary across calls")
+	mean := sum / samples
+	require.InDelta(t, float64(base), float64(mean), float64(base)*0.10,
+		"mean should be near base value")
+}
+
+func TestJitterBackoff_ZeroReturnsZero(t *testing.T) {
+	require.Equal(t, time.Duration(0), jitterBackoff(0))
+}
+
 func TestRunRetryLoop_ContextCancelStops(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
