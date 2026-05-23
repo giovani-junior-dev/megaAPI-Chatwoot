@@ -44,12 +44,13 @@ type Config struct {
 }
 
 type Server struct {
-	DB     *DB
-	Key    []byte
-	Inbox  chan Job
-	Outbox chan Job
-	Log    zerolog.Logger
-	Cfg    Config
+	DB      *DB
+	Key     []byte
+	Inbox   chan Job
+	Outbox  chan Job
+	Log     zerolog.Logger
+	Cfg     Config
+	Metrics *Metrics
 }
 
 func NewServer(db *DB, key []byte, cfg Config, log zerolog.Logger) *Server {
@@ -57,12 +58,13 @@ func NewServer(db *DB, key []byte, cfg Config, log zerolog.Logger) *Server {
 		cfg.BufferLimit = defaultBuffer
 	}
 	return &Server{
-		DB:     db,
-		Key:    key,
-		Inbox:  make(chan Job, cfg.BufferLimit),
-		Outbox: make(chan Job, cfg.BufferLimit),
-		Log:    log,
-		Cfg:    cfg,
+		DB:      db,
+		Key:     key,
+		Inbox:   make(chan Job, cfg.BufferLimit),
+		Outbox:  make(chan Job, cfg.BufferLimit),
+		Log:     log,
+		Cfg:     cfg,
+		Metrics: NewMetrics(),
 	}
 }
 
@@ -72,9 +74,18 @@ func (s *Server) Routes() http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Get("/healthz", s.handleHealth)
 	r.Get("/readyz", s.handleReady)
+	r.Get("/metrics", s.handleMetrics)
 	r.Post("/v1/wa/{slug}", s.handleWAWebhook)
 	r.Post("/v1/cw/{slug}", s.handleCWWebhook)
 	return r
+}
+
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if s.Metrics == nil {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "disabled"})
+		return
+	}
+	s.Metrics.Handler().ServeHTTP(w, r)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -209,12 +220,24 @@ func (s *Server) enqueue(w http.ResponseWriter, ctx context.Context, tenantID uu
 		return
 	}
 	select {
-	case ch <- Job{TenantID: tenantID, MessageID: id, Payload: body}:
+	case ch <- Job{TenantID: tenantID, MessageID: id, Direction: direction, Payload: body}:
+		s.incEnqueued(direction)
 		writeJSON(w, http.StatusOK, map[string]string{"status": "queued"})
 	default:
 		_ = s.DB.MarkStatus(ctx, id, "failed", "queue full")
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"queue": "full"})
 	}
+}
+
+func (s *Server) incEnqueued(direction string) {
+	if s.Metrics == nil {
+		return
+	}
+	if direction == directionIn {
+		s.Metrics.MessagesIn.Inc()
+		return
+	}
+	s.Metrics.MessagesOut.Inc()
 }
 
 func (s *Server) checkBearer(r *http.Request, t Tenant) (bool, error) {

@@ -116,6 +116,7 @@ func cmdServe(ctx context.Context, log zerolog.Logger) error {
 	}
 	go srv.RunWorkers(ctx)
 	go srv.RunStaleJanitor(ctx)
+	go srv.RunQueueDepthUpdater(ctx)
 	return runHTTP(ctx, log, srv)
 }
 

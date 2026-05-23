@@ -21,6 +21,7 @@ import (
 type Job struct {
 	TenantID  uuid.UUID
 	MessageID uuid.UUID
+	Direction string
 	Payload   []byte
 }
 
@@ -88,10 +89,12 @@ func runRetryLoop(ctx context.Context, backoffs []time.Duration, attempt func() 
 
 func (s *Server) runJob(ctx context.Context, job Job,
 	fn func(context.Context, Job) error) {
+	start := time.Now()
 	err := runRetryLoop(ctx, retryBackoff, func() error {
 		_ = s.DB.IncrementAttempts(ctx, job.MessageID)
 		return fn(ctx, job)
 	})
+	s.observeJob(job.Direction, start)
 	if err == nil {
 		if e := s.DB.MarkStatus(ctx, job.MessageID, "done", ""); e != nil {
 			s.Log.Err(e).Str("msg_id", job.MessageID.String()).
@@ -103,15 +106,48 @@ func (s *Server) runJob(ctx context.Context, job Job,
 		return
 	}
 	s.Log.Err(err).Str("msg_id", job.MessageID.String()).Msg("job failed")
+	s.incFailed()
 	if e := s.DB.MarkStatus(ctx, job.MessageID, "failed", err.Error()); e != nil {
 		s.Log.Err(e).Str("msg_id", job.MessageID.String()).Msg("mark failed update failed")
 	}
+}
+
+func (s *Server) observeJob(direction string, start time.Time) {
+	if s.Metrics == nil {
+		return
+	}
+	s.Metrics.ObserveJobDuration(direction, start)
+}
+
+func (s *Server) incFailed() {
+	if s.Metrics == nil {
+		return
+	}
+	s.Metrics.MessagesFailed.Inc()
 }
 
 const (
 	staleSweepInterval = 5 * time.Minute
 	staleSweepAge      = time.Hour
 )
+
+const queueDepthInterval = 5 * time.Second
+
+func (s *Server) RunQueueDepthUpdater(ctx context.Context) {
+	if s.Metrics == nil {
+		return
+	}
+	t := time.NewTicker(queueDepthInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			s.Metrics.UpdateQueueDepth(len(s.Inbox), len(s.Outbox))
+		}
+	}
+}
 
 func (s *Server) RunStaleJanitor(ctx context.Context) {
 	t := time.NewTicker(staleSweepInterval)
@@ -143,7 +179,7 @@ func (s *Server) RecoverPending(ctx context.Context) error {
 		if m.Direction == directionOut {
 			ch = s.Outbox
 		}
-		job := Job{TenantID: m.TenantID, MessageID: m.ID, Payload: m.Payload}
+		job := Job{TenantID: m.TenantID, MessageID: m.ID, Direction: m.Direction, Payload: m.Payload}
 		select {
 		case ch <- job:
 		default:
