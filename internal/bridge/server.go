@@ -52,6 +52,7 @@ type Server struct {
 	Log     zerolog.Logger
 	Cfg     Config
 	Metrics *Metrics
+	Web     http.Handler
 }
 
 func NewServer(db *DB, key []byte, cfg Config, log zerolog.Logger) *Server {
@@ -73,6 +74,10 @@ func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
+	if s.Web != nil {
+		r.NotFound(s.Web.ServeHTTP)
+		r.MethodNotAllowed(s.Web.ServeHTTP)
+	}
 	r.Get("/healthz", s.handleHealth)
 	r.Get("/readyz", s.handleReady)
 	r.Get("/metrics", s.handleMetrics)

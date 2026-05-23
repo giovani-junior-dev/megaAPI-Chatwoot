@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/madeinlowcode/chatwoot-megaapi-bridge/internal/bridge"
+	"github.com/madeinlowcode/chatwoot-megaapi-bridge/internal/bridge/web"
 	"github.com/madeinlowcode/chatwoot-megaapi-bridge/migrations"
 )
 
@@ -111,6 +112,11 @@ func cmdServe(ctx context.Context, log zerolog.Logger) error {
 	}
 	defer db.Close()
 	srv := bridge.NewServer(db, key, loadServerConfig(), log)
+	wh, err := web.New(web.Deps{DB: db})
+	if err != nil {
+		return err
+	}
+	srv.Web = wh.Routes()
 	if err := srv.RecoverPending(ctx); err != nil {
 		log.Warn().Err(err).Msg("recover pending failed")
 	}
