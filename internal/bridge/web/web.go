@@ -40,7 +40,11 @@ type Handler struct {
 }
 
 func New(d Deps) (*Handler, error) {
-	tpl, err := template.ParseFS(templatesFS, "templates/*.html")
+	strings, err := loadLocale(defaultLocale)
+	if err != nil {
+		return nil, err
+	}
+	tpl, err := template.New("").Funcs(i18nFuncMap(strings)).ParseFS(templatesFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
