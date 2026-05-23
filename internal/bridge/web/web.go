@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/madeinlowcode/chatwoot-megaapi-bridge/internal/bridge"
 )
@@ -21,6 +22,8 @@ type Deps struct {
 	GetSetting    func(context.Context, string) (string, error)
 	SetSetting    func(context.Context, string, string) error
 	FetchInboxes  func(context.Context, discoverReq) ([]Inbox, error)
+	InsertTenant  func(context.Context, bridge.TenantInsert) (uuid.UUID, error)
+	ConfigWebhook func(context.Context, MegaAPIWebhookConfig) error
 	Key           []byte
 }
 
@@ -39,10 +42,12 @@ func New(d Deps) (*Handler, error) {
 
 func NewFromDB(db *bridge.DB, key []byte) (*Handler, error) {
 	return New(Deps{
-		GetAdmin:   db.GetAdmin,
-		GetSetting: db.GetSetting,
-		SetSetting: db.SetSetting,
-		Key:        key,
+		GetAdmin:      db.GetAdmin,
+		GetSetting:    db.GetSetting,
+		SetSetting:    db.SetSetting,
+		InsertTenant:  db.InsertTenant,
+		ConfigWebhook: ConfigureMegaAPIWebhook,
+		Key:           key,
 	})
 }
 
@@ -56,6 +61,8 @@ func (h *Handler) Routes() http.Handler {
 	r.Get("/settings", h.handleSettings)
 	r.Post("/settings/base_url", h.handleSettingsBaseURL)
 	r.Post("/tenants/discover-inboxes", h.handleDiscoverInboxes)
+	r.Get("/tenants/new", h.handleTenantNew)
+	r.Post("/tenants", h.handleTenantCreate)
 	return r
 }
 

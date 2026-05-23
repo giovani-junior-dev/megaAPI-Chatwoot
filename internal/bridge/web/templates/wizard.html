@@ -1,0 +1,52 @@
+{{define "content"}}
+{{with .Data}}
+<section class="max-w-2xl" x-data="{step:1}">
+  <h1 class="text-2xl font-semibold mb-4">Novo tenant — passo <span x-text="step"></span> de 4</h1>
+  <form method="post" action="/tenants" class="bg-white border border-slate-200 rounded p-6 space-y-4">
+    <div x-show="step===1" class="space-y-3">
+      <h2 class="font-medium">1) Identificação</h2>
+      <label class="block"><span class="text-sm">Slug</span>
+        <input name="slug" required class="mt-1 w-full border rounded px-3 py-2" placeholder="empresa-x"></label>
+      <button type="button" @click="step=2" class="bg-slate-900 text-white px-4 py-2 rounded">Próximo</button>
+    </div>
+    <div x-show="step===2" class="space-y-3">
+      <h2 class="font-medium">2) megaAPI</h2>
+      <label class="block"><span class="text-sm">Host</span>
+        <input name="megaapi_host" required class="mt-1 w-full border rounded px-3 py-2"></label>
+      <label class="block"><span class="text-sm">Instance</span>
+        <input name="megaapi_instance" required class="mt-1 w-full border rounded px-3 py-2"></label>
+      <label class="block"><span class="text-sm">Token</span>
+        <input name="megaapi_token" required class="mt-1 w-full border rounded px-3 py-2"></label>
+      <div class="flex gap-2">
+        <button type="button" @click="step=1" class="px-4 py-2 border rounded">Voltar</button>
+        <button type="button" @click="step=3" class="bg-slate-900 text-white px-4 py-2 rounded">Próximo</button>
+      </div>
+    </div>
+    <div x-show="step===3" class="space-y-3">
+      <h2 class="font-medium">3) Chatwoot</h2>
+      <label class="block"><span class="text-sm">URL</span>
+        <input name="chatwoot_url" required class="mt-1 w-full border rounded px-3 py-2"></label>
+      <label class="block"><span class="text-sm">Token</span>
+        <input name="chatwoot_token" required class="mt-1 w-full border rounded px-3 py-2"></label>
+      <label class="block"><span class="text-sm">Account ID</span>
+        <input name="chatwoot_account_id" type="number" required class="mt-1 w-full border rounded px-3 py-2"></label>
+      <label class="block"><span class="text-sm">Inbox ID</span>
+        <input name="chatwoot_inbox_id" type="number" required class="mt-1 w-full border rounded px-3 py-2"></label>
+      <div class="flex gap-2">
+        <button type="button" @click="step=2" class="px-4 py-2 border rounded">Voltar</button>
+        <button type="button" @click="step=4" class="bg-slate-900 text-white px-4 py-2 rounded">Próximo</button>
+      </div>
+    </div>
+    <div x-show="step===4" class="space-y-3">
+      <h2 class="font-medium">4) Revisão</h2>
+      <p class="text-sm text-slate-600">Base URL atual: <code>{{.BaseURL}}</code>.
+        Ao finalizar, o webhook da instância megaAPI será configurado automaticamente.</p>
+      <div class="flex gap-2">
+        <button type="button" @click="step=3" class="px-4 py-2 border rounded">Voltar</button>
+        <button type="submit" class="bg-green-700 text-white px-4 py-2 rounded">Criar tenant</button>
+      </div>
+    </div>
+  </form>
+</section>
+{{end}}
+{{end}}
