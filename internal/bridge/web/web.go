@@ -17,8 +17,10 @@ const (
 )
 
 type Deps struct {
-	GetAdmin func(context.Context, string) (bridge.Admin, error)
-	Key      []byte
+	GetAdmin   func(context.Context, string) (bridge.Admin, error)
+	GetSetting func(context.Context, string) (string, error)
+	SetSetting func(context.Context, string, string) error
+	Key        []byte
 }
 
 type Handler struct {
@@ -36,8 +38,10 @@ func New(d Deps) (*Handler, error) {
 
 func NewFromDB(db *bridge.DB, key []byte) (*Handler, error) {
 	return New(Deps{
-		GetAdmin: db.GetAdmin,
-		Key:      key,
+		GetAdmin:   db.GetAdmin,
+		GetSetting: db.GetSetting,
+		SetSetting: db.SetSetting,
+		Key:        key,
 	})
 }
 
@@ -48,6 +52,8 @@ func (h *Handler) Routes() http.Handler {
 	r.Get("/login", h.handleLoginForm)
 	r.Post("/login", h.handleLoginSubmit)
 	r.Post("/logout", h.handleLogout)
+	r.Get("/settings", h.handleSettings)
+	r.Post("/settings/base_url", h.handleSettingsBaseURL)
 	return r
 }
 

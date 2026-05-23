@@ -1,0 +1,18 @@
+{{define "content"}}
+{{with .Data}}
+<section class="space-y-4 max-w-xl">
+  <h1 class="text-2xl font-semibold">Configurações</h1>
+  {{if .Saved}}<p class="text-sm text-green-700">Salvo.</p>{{end}}
+  <form method="post" action="/settings/base_url" class="space-y-3 bg-white border border-slate-200 rounded p-4">
+    <label class="block">
+      <span class="text-sm text-slate-700">Base URL pública do bridge</span>
+      <input type="url" name="base_url" required value="{{.BaseURL}}"
+             placeholder="https://bridge.exemplo.com"
+             class="mt-1 w-full border border-slate-300 rounded px-3 py-2">
+      <span class="text-xs text-slate-500">Usado para registrar webhooks externos.</span>
+    </label>
+    <button type="submit" class="bg-slate-900 text-white rounded px-4 py-2 hover:bg-slate-800">Salvar</button>
+  </form>
+</section>
+{{end}}
+{{end}}
