@@ -25,3 +25,7 @@ coverage.txt
 .archon/artifacts/
 .archon/logs/
 deploy/chatwoot.env
+deploy/.env.bridge
+deploy/.env.chatwoot
+deploy/.env.local
+deploy/.cloudflared/
