@@ -1,0 +1,33 @@
+groups:
+  - name: bridge.alerts
+    interval: 30s
+    rules:
+      - alert: high_failed_rate
+        expr: rate(bridge_messages_failed_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: bridge
+        annotations:
+          summary: "Bridge failure rate above threshold"
+          description: "rate(bridge_messages_failed_total[5m]) = {{ $value }} > 0.1 for 5m. Check /admin/failed and worker logs."
+
+      - alert: queue_depth_high
+        expr: max(bridge_queue_depth) > 500
+        for: 2m
+        labels:
+          severity: warning
+          service: bridge
+        annotations:
+          summary: "Bridge in-process queue depth high"
+          description: "Queue depth {{ $value }} > 500 for 2m. Workers may be stalled or downstream is slow."
+
+      - alert: msg_rate_drop
+        expr: rate(bridge_messages_in_total[5m]) == 0 and rate(bridge_messages_in_total[1h] offset 1h) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: bridge
+        annotations:
+          summary: "Inbound message rate dropped to zero"
+          description: "No inbound messages for 10m despite prior traffic. Check megaAPI webhook config and tenant Bearer tokens."
