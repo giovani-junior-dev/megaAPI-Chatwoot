@@ -1,0 +1,60 @@
+{
+	"Golang errors": {},
+	"Issues": [
+		{
+			"severity": "MEDIUM",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "614",
+				"url": "https://cwe.mitre.org/data/definitions/614.html"
+			},
+			"rule_id": "G124",
+			"details": "http.Cookie missing or has insecure Secure, HttpOnly, or SameSite attribute",
+			"file": "C:\\Users\\GEOVANE\\Desktop\\Projetos\\chatwoot-megaapi-bridge\\internal\\bridge\\web\\login.go",
+			"code": "66: func clearSessionCookie(w http.ResponseWriter) {\n67: \thttp.SetCookie(w, \u0026http.Cookie{\n68: \t\tName:     cookieName,\n",
+			"line": "67",
+			"column": "32",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "MEDIUM",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "614",
+				"url": "https://cwe.mitre.org/data/definitions/614.html"
+			},
+			"rule_id": "G124",
+			"details": "http.Cookie missing or has insecure Secure, HttpOnly, or SameSite attribute",
+			"file": "C:\\Users\\GEOVANE\\Desktop\\Projetos\\chatwoot-megaapi-bridge\\internal\\bridge\\web\\login.go",
+			"code": "55: func setSessionCookie(w http.ResponseWriter, value string) {\n56: \thttp.SetCookie(w, \u0026http.Cookie{\n57: \t\tName:     cookieName,\n",
+			"line": "56",
+			"column": "32",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "LOW",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "703",
+				"url": "https://cwe.mitre.org/data/definitions/703.html"
+			},
+			"rule_id": "G104",
+			"details": "Errors unhandled",
+			"file": "C:\\Users\\GEOVANE\\Desktop\\Projetos\\chatwoot-megaapi-bridge\\internal\\bridge\\media.go",
+			"code": "70: \t}\n71: \tresp.Body.Close()\n72: \tif ct := resp.Header.Get(\"Content-Type\"); ct != \"\" {\n",
+			"line": "71",
+			"column": "2",
+			"nosec": false,
+			"suppressions": null
+		}
+	],
+	"Stats": {
+		"files": 29,
+		"lines": 3439,
+		"nosec": 2,
+		"found": 3
+	},
+	"GosecVersion": "dev"
+}

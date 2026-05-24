@@ -1,0 +1,31 @@
+Results:
+
+
+[C:\Users\GEOVANE\Desktop\Projetos\chatwoot-megaapi-bridge\internal\bridge\web\login.go:67] - G124 (CWE-614): http.Cookie missing or has insecure Secure, HttpOnly, or SameSite attribute (Confidence: HIGH, Severity: MEDIUM)
+    66: func clearSessionCookie(w http.ResponseWriter) {
+  > 67: 	http.SetCookie(w, &http.Cookie{
+    68: 		Name:     cookieName,
+
+Autofix: 
+
+[C:\Users\GEOVANE\Desktop\Projetos\chatwoot-megaapi-bridge\internal\bridge\web\login.go:56] - G124 (CWE-614): http.Cookie missing or has insecure Secure, HttpOnly, or SameSite attribute (Confidence: HIGH, Severity: MEDIUM)
+    55: func setSessionCookie(w http.ResponseWriter, value string) {
+  > 56: 	http.SetCookie(w, &http.Cookie{
+    57: 		Name:     cookieName,
+
+Autofix: 
+
+[C:\Users\GEOVANE\Desktop\Projetos\chatwoot-megaapi-bridge\internal\bridge\media.go:71] - G104 (CWE-703): Errors unhandled (Confidence: HIGH, Severity: LOW)
+    70: 	}
+  > 71: 	resp.Body.Close()
+    72: 	if ct := resp.Header.Get("Content-Type"); ct != "" {
+
+Autofix: 
+
+Summary:
+  Gosec  : dev
+  Files  : 29
+  Lines  : 3439
+  Nosec  : 2
+  Issues : 3
+

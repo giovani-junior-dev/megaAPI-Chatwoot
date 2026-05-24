@@ -155,7 +155,7 @@ func loadServerConfig() bridge.Config {
 func runHTTP(ctx context.Context, log zerolog.Logger, srv *bridge.Server) error {
 	addr := ":" + getEnv("BRIDGE_PORT", "8080")
 	httpSrv := &http.Server{Addr: addr, Handler: srv.Routes(), ReadHeaderTimeout: 10 * time.Second}
-	go func() {
+	go func() { // #nosec G118 -- shutdown needs a fresh deadline once the parent ctx is cancelled
 		<-ctx.Done()
 		c, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

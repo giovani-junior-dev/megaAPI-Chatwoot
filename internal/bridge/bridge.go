@@ -33,7 +33,7 @@ func jitterBackoff(d time.Duration) time.Duration {
 	if d <= 0 {
 		return 0
 	}
-	factor := 0.75 + rand.Float64()*0.5
+	factor := 0.75 + rand.Float64()*0.5 // #nosec G404 -- non-cryptographic jitter; predictability harmless
 	return time.Duration(float64(d) * factor)
 }
 
