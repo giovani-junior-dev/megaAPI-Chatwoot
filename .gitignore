@@ -30,3 +30,4 @@ deploy/.env.chatwoot
 deploy/.env.local
 deploy/.env.tunnel
 deploy/.cloudflared/
+deploy/backups/
