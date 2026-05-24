@@ -114,6 +114,15 @@ func cmdServe(ctx context.Context, log zerolog.Logger) error {
 		return err
 	}
 	defer db.Close()
+	shutdown, err := bridge.InitTracer(ctx)
+	if err != nil {
+		log.Warn().Err(err).Msg("otel init failed; continuing without tracing")
+	}
+	defer func() {
+		sc, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = shutdown(sc)
+	}()
 	srv := bridge.NewServer(db, key, loadServerConfig(), log)
 	wh, err := web.NewFromDB(db, key)
 	if err != nil {
