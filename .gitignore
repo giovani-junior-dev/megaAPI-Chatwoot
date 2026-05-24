@@ -28,4 +28,5 @@ deploy/chatwoot.env
 deploy/.env.bridge
 deploy/.env.chatwoot
 deploy/.env.local
+deploy/.env.tunnel
 deploy/.cloudflared/
