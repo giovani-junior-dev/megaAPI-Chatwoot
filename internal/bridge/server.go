@@ -83,6 +83,7 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/metrics", s.handleMetrics)
 	r.Get("/admin/failed", s.handleAdminFailed)
 	r.Post("/admin/retry/{id}", s.handleAdminRetry)
+	s.mountPprof(r)
 	r.Post("/v1/wa/{slug}", s.handleWAWebhook)
 	r.Post("/v1/cw/{slug}", s.handleCWWebhook)
 	return r
