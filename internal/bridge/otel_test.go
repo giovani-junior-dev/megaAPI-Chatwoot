@@ -19,6 +19,26 @@ func TestInitTracer_NoEndpoint_NoOp(t *testing.T) {
 	span.End()
 }
 
+func TestInitTracer_ShutdownIdempotent(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	shutdown, err := InitTracer(context.Background())
+	require.NoError(t, err)
+	require.NoError(t, shutdown(context.Background()))
+	require.NoError(t, shutdown(context.Background()), "second shutdown should also succeed for no-op")
+}
+
+func TestTracerResource_IncludesServiceName(t *testing.T) {
+	res := tracerResource()
+	require.NotNil(t, res)
+	found := false
+	for _, attr := range res.Attributes() {
+		if string(attr.Key) == "service.name" && attr.Value.AsString() == "chatwoot-megaapi-bridge" {
+			found = true
+		}
+	}
+	require.True(t, found, "resource should carry service.name=chatwoot-megaapi-bridge")
+}
+
 func TestInitTracer_WithEndpoint_RegistersSDKProvider(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
 	shutdown, err := InitTracer(context.Background())

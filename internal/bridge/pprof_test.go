@@ -37,6 +37,25 @@ func TestPprofIndex_ValidCookie_Returns200(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 }
 
+func TestPprofCmdline_ValidCookie_Returns200(t *testing.T) {
+	s := newTestServer(t, nil)
+	tok, err := NewSession("admin@example.com", s.Key, time.Hour)
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/cmdline", nil)
+	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: tok})
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestPprofCmdline_NoCookie_Returns401(t *testing.T) {
+	s := newTestServer(t, nil)
+	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/cmdline", nil)
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
 func TestPprofProfileNames_ValidCookie_Return200(t *testing.T) {
 	s := newTestServer(t, nil)
 	tok, err := NewSession("admin@example.com", s.Key, time.Hour)
