@@ -53,21 +53,21 @@ func TestConfigureChatwootWebhook_ReturnsErrorOnNon2xx(t *testing.T) {
 	require.Contains(t, err.Error(), "401")
 }
 
-func TestFetchChatwootInboxHMAC_ReturnsToken(t *testing.T) {
+func TestFetchChatwootInboxHMAC_ReturnsChannelSecret(t *testing.T) {
 	var path, method, token string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path = r.URL.Path
 		method = r.Method
 		token = r.Header.Get("api_access_token")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"hmac_token":"abc123","name":"x"}`))
+		_, _ = w.Write([]byte(`{"hmac_token":"widget-only","secret":"server-webhook-sig","name":"x"}`))
 	}))
 	defer srv.Close()
 	got, err := FetchChatwootInboxHMAC(context.Background(), ChatwootWebhookConfig{
 		BaseURL: srv.URL, Token: "cw-tok", AccountID: 3, InboxID: 7,
 	})
 	require.NoError(t, err)
-	require.Equal(t, "abc123", got)
+	require.Equal(t, "server-webhook-sig", got, "must read channel.secret used for api_inbox_webhook HMAC, NOT hmac_token (widget only)")
 	require.Equal(t, http.MethodGet, method)
 	require.Equal(t, "/api/v1/accounts/3/inboxes/7", path)
 	require.Equal(t, "cw-tok", token)

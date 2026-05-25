@@ -69,10 +69,10 @@ func FetchChatwootInboxHMAC(ctx context.Context, cfg ChatwootWebhookConfig) (str
 		return "", fmt.Errorf("chatwoot %d: %s", resp.StatusCode, string(b))
 	}
 	var out struct {
-		HMACToken string `json:"hmac_token"`
+		Secret string `json:"secret"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", err
 	}
-	return out.HMACToken, nil
+	return out.Secret, nil
 }
