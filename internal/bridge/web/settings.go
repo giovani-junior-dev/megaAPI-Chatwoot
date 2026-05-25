@@ -1,7 +1,9 @@
 package web
 
 import (
+	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -27,7 +29,11 @@ func (h *Handler) handleSettingsBaseURL(w http.ResponseWriter, r *http.Request) 
 	}
 	val := strings.TrimSpace(r.PostFormValue("base_url"))
 	if val == "" {
-		http.Error(w, "base_url required", http.StatusBadRequest)
+		http.Error(w, "base_url obrigatório", http.StatusBadRequest)
+		return
+	}
+	if err := validateBaseURL(val); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if h.deps.SetSetting == nil {
@@ -40,3 +46,16 @@ func (h *Handler) handleSettingsBaseURL(w http.ResponseWriter, r *http.Request) 
 	}
 	http.Redirect(w, r, "/settings?saved=1", http.StatusFound)
 }
+
+func validateBaseURL(s string) error {
+	u, err := url.Parse(s)
+	if err != nil || u.Host == "" {
+		return errInvalidBaseURL
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return errInvalidBaseURL
+	}
+	return nil
+}
+
+var errInvalidBaseURL = errors.New("base_url inválido: use http:// ou https:// com host")
