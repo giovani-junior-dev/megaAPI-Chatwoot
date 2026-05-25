@@ -31,3 +31,4 @@ deploy/.env.local
 deploy/.env.tunnel
 deploy/.cloudflared/
 deploy/backups/
+.playwright-mcp/
