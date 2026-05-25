@@ -137,3 +137,11 @@ These were paid for in real debugging time. Read them before live-testing.
 - **Slug duplicates surface `pgconn.PgError.Code == "23505"`.** Map it to a
   409 with a clean PT-BR message in the wizard; do not let the raw SQL
   error escape to the operator.
+- **Restart Chatwoot rails + sidekiq containers after changing
+  `FRONTEND_URL` in `deploy/chatwoot.env`.** Rails caches the value at boot
+  and serves the old URL in webhook payloads (`data_url` field on media
+  attachments). If you skip the restart, megaAPI receives stale URLs and
+  cannot fetch the attachment — symptoms are 404s on outbound media and
+  silent attachment-not-found errors on inbound. Use
+  `docker compose restart rails sidekiq` (or whichever service names the
+  Chatwoot stack uses) before the next live-test.

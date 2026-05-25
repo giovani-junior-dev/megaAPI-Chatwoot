@@ -109,3 +109,26 @@ Same as v1.0.0:
   deferred from F2 to be tackled after the pilot.
 - v1.1 plan items deferred from v1.0.0: `BRIDGE_SECURE_COOKIE` flag,
   media-heavy k6 scenarios, replica fail-over docs.
+
+## E2E validation results (2026-05-25)
+
+Live-test cycle executed against a production-style stack (real megaAPI
+instance, real Chatwoot, real WhatsApp endpoint via ngrok + cloudflared):
+
+- Full reset cycle executed end-to-end: Chatwoot inbox / conversations /
+  contacts deleted, bridge `tenants` / `messages` / `contacts` truncated and
+  `settings` cleared, tunnels rotated.
+- Wizard 4-step tenant creation completed all 6 sub-steps automatically:
+  tenant row insert, megaAPI `configWebhook`, Chatwoot `PATCH inbox`,
+  Chatwoot `channel.secret` fetch, AES-256-GCM encrypt, persist on tenant.
+- Bidirectional message flow PASS: WA → CW (WhatsApp inbound message
+  surfaces in Chatwoot conversation) and CW → WA (agent reply in Chatwoot
+  delivers on WhatsApp), both verified manually.
+- Zero manual paste required after the wizard finished — no copy of webhook
+  URLs, no copy of HMAC secrets.
+
+## Release published
+
+- Tag pushed: `v1.0.1` against commit `587aa7d` on `master`.
+- GitHub release: <https://github.com/giovani-junior-dev/megaAPI-Chatwoot/releases/tag/v1.0.1>.
+- Published at: 2026-05-25.

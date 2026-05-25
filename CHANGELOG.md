@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Post-release wizard hardening uncovered during QA sweep + the first day of the
 self-pilot burn-in. No schema migrations; safe drop-in over v1.0.0.
 
+Tag pushed and GitHub release published 2026-05-25:
+<https://github.com/giovani-junior-dev/megaAPI-Chatwoot/releases/tag/v1.0.1>.
+
 ### Added
 
 - **Wizard auto-config Chatwoot inbox webhook** (commit `b204e66`). On tenant
@@ -42,6 +45,11 @@ self-pilot burn-in. No schema migrations; safe drop-in over v1.0.0.
 - **QA sweep test coverage** (commit `7cbb94d`). Expanded unit tests around
   auth, admin guards, and URL validation. Total now: **231 unit tests + 301
   integration tests** passing.
+- **Validated end-to-end on a production-style environment with a full reset
+  cycle** (2026-05-25). Chatwoot inbox/conversations/contacts cleared, bridge
+  `tenants`/`messages`/`contacts`/`settings` truncated, tunnels rotated, new
+  tenant onboarded via the 4-step wizard against a real megaAPI instance.
+  WA→CW and CW→WA both PASS with zero manual paste after the wizard.
 
 ### Fixed
 

@@ -106,6 +106,85 @@ The CLI path does **not** auto-provision the Chatwoot inbox webhook — the
 operator must PATCH it by hand, or re-onboard via the wizard. Use the CLI
 only when the admin UI is unreachable.
 
+### Reset completo (dev / staging only)
+
+Procedimento usado em 2026-05-25 para validar o ciclo E2E de v1.0.1 do
+zero. **Nunca rodar em produção** — apaga conversations, contacts, inbox e
+todos os tenants. Documentado aqui para que o próximo operador consiga
+reproduzir um burn-in controlado.
+
+Pré-requisitos: `ADMIN_TOKEN` do Chatwoot (Profile → Access Token),
+acesso shell ao Docker host do bridge + Chatwoot, `psql` no container `db`.
+
+1. **Apagar conversations + contacts no Chatwoot** (substitua
+   `<account_id>`, `<conversation_id>`, `<contact_id>`):
+
+   ```bash
+   # listar e deletar conversas
+   curl -fsS -H "api_access_token: $CW_ADMIN_TOKEN" \
+     https://chatwoot.example.com/api/v1/accounts/<account_id>/conversations \
+     | jq -r '.data.payload[].id' \
+     | xargs -I{} curl -fsS -X DELETE \
+         -H "api_access_token: $CW_ADMIN_TOKEN" \
+         https://chatwoot.example.com/api/v1/accounts/<account_id>/conversations/{}
+
+   # listar e deletar contatos
+   curl -fsS -H "api_access_token: $CW_ADMIN_TOKEN" \
+     https://chatwoot.example.com/api/v1/accounts/<account_id>/contacts \
+     | jq -r '.payload[].id' \
+     | xargs -I{} curl -fsS -X DELETE \
+         -H "api_access_token: $CW_ADMIN_TOKEN" \
+         https://chatwoot.example.com/api/v1/accounts/<account_id>/contacts/{}
+   ```
+
+2. **Apagar o inbox** (substitua `<inbox_id>`):
+
+   ```bash
+   curl -fsS -X DELETE \
+     -H "api_access_token: $CW_ADMIN_TOKEN" \
+     https://chatwoot.example.com/api/v1/accounts/<account_id>/inboxes/<inbox_id>
+   ```
+
+3. **Truncar tabelas do bridge + limpar settings**:
+
+   ```bash
+   docker compose exec -T db psql -U bridge -d bridge <<'SQL'
+   TRUNCATE TABLE messages CASCADE;
+   TRUNCATE TABLE contacts CASCADE;
+   TRUNCATE TABLE tenants CASCADE;
+   DELETE FROM settings;
+   SQL
+   ```
+
+4. **Rotacionar túneis e atualizar `FRONTEND_URL`** (quando o host público
+   muda entre cycles, ex.: ngrok ou cloudflared trycloudflare):
+
+   ```bash
+   # rotacionar túneis (exemplo manual)
+   ngrok http 8090           # novo URL para o bridge
+   cloudflared tunnel --url http://chatwoot:3000  # novo URL para Chatwoot
+
+   # atualizar deploy/chatwoot.env (gitignored)
+   #   FRONTEND_URL=https://<novo-tunnel-chatwoot>
+   # então:
+   docker compose -f deploy/chatwoot.yml restart rails sidekiq
+   ```
+
+   **Obrigatório** restartar `rails` + `sidekiq`: ver lição em `CLAUDE.md`
+   ("Lessons Learned" — Chatwoot serve URL antiga no `data_url` se Rails
+   não for reiniciado).
+
+5. **Recriar inbox manualmente** no Chatwoot UI
+   (`Settings → Inboxes → Add Inbox → API`) e anotar o novo `inbox_id`.
+
+6. **Recriar tenant via wizard** em `Admin UI → Tenants → Novo Tenant`.
+   O wizard cobre os 6 sub-passos automaticamente (insert, megaAPI
+   `configWebhook`, Chatwoot `PATCH inbox`, fetch `channel.secret`,
+   AES-GCM encrypt, persist).
+
+7. **Smoke** envie 1 msg WhatsApp inbound + 1 reply do agente; ambas devem
+   aparecer com `status=done` em `messages` em <5s.
+
 ## Upgrade
 
 Always run `deploy/upgrade.sh`. It:
@@ -340,5 +419,6 @@ should:
 ---
 
 Owner: Bridge SRE on-call rotation.
-Last reviewed: 2026-05-25 (v1.0.1 wizard hardening — see POSTMORTEM-QA-SESSION.md).
+Last reviewed: 2026-05-25 (v1.0.1 wizard hardening + reset E2E procedure
+documented — see POSTMORTEM-QA-SESSION.md and "Reset completo" above).
 Re-review trigger: any change to the deploy topology, secret model, or worker model.

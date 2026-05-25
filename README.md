@@ -4,7 +4,9 @@ Open-source HTTP bridge between **megaAPI** (WhatsApp) and **Chatwoot**, multi-t
 flat-first Go implementation. One binary, three tables, in-process channels —
 no Redis, no Worker pool service, no microservices.
 
-**Latest:** [`v1.0.1`](https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/releases) — wizard hardening (auto-config Chatwoot inbox webhook, HMAC pairing via `channel.secret`, slug duplicate friendly 409, `base_url` validation). See [CHANGELOG](./CHANGELOG.md) and [v1.0.0 release notes](./docs/release/RELEASE_NOTES.md).
+**Latest stable: [`v1.0.1`](https://github.com/giovani-junior-dev/megaAPI-Chatwoot/releases/tag/v1.0.1)** — wizard hardening (auto-config Chatwoot inbox webhook, HMAC pairing via `channel.secret`, slug duplicate friendly 409, `base_url` validation). Published 2026-05-25, drop-in over v1.0.0, no schema migrations. See [v1.0.1 release notes](./docs/release/RELEASE_NOTES_v1.0.1.md), [CHANGELOG](./CHANGELOG.md), and [v1.0.0 release notes](./docs/release/RELEASE_NOTES.md).
+
+> **Operator note:** before opening the tenant wizard, set `settings.base_url` (Admin → Configurações). The wizard refuses to create a tenant if it is empty or malformed.
 
 ## v1.0.x feature set
 
