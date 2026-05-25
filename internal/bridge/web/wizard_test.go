@@ -131,6 +131,32 @@ func TestWizardPOSTRejectsMissingField(t *testing.T) {
 	}
 }
 
+func TestWizardPOSTRejectsMissingBaseURL(t *testing.T) {
+	sink := &tenantSink{}
+	key := bridge.RandomBytes(32)
+	store := newStore()
+	h, err := New(Deps{
+		Key:          key,
+		InsertTenant: sink.insert,
+		GetSetting:   store.get,
+		SetSetting:   store.set,
+	})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/tenants",
+		strings.NewReader(validWizardForm().Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	require.Equal(t, http.StatusBadRequest, rr.Code,
+		"wizard must block tenant creation when base_url setting is missing")
+	body := rr.Body.String()
+	require.Contains(t, body, "Base URL")
+	require.Contains(t, body, "/settings")
+	require.Equal(t, uuid.Nil, sink.id,
+		"InsertTenant must not run without base_url")
+}
+
 func TestWizardPOSTFiresChatwootWebhookConfig(t *testing.T) {
 	sink := &tenantSink{}
 	megaCfgCalled := false

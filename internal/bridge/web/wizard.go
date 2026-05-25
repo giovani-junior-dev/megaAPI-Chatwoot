@@ -36,6 +36,13 @@ func (h *Handler) handleTenantCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "wizard disabled", http.StatusServiceUnavailable)
 		return
 	}
+	if h.deps.GetSetting != nil {
+		base, _ := h.deps.GetSetting(r.Context(), settingBaseURL)
+		if strings.TrimSpace(base) == "" {
+			http.Error(w, "Base URL pública não configurada. Acesse /settings antes de criar tenants.", http.StatusBadRequest)
+			return
+		}
+	}
 	bearer, _, ti, err := bridge.BuildTenantInsert(h.deps.Key, spec)
 	if err != nil {
 		http.Error(w, "crypto error", http.StatusInternalServerError)
