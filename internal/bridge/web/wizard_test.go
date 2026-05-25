@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/stretchr/testify/require"
 
 	"github.com/madeinlowcode/chatwoot-megaapi-bridge/internal/bridge"
 )
@@ -128,6 +129,46 @@ func TestWizardPOSTRejectsMissingField(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rr.Code)
 	}
+}
+
+func TestWizardPOSTFiresChatwootWebhookConfig(t *testing.T) {
+	sink := &tenantSink{}
+	megaCfgCalled := false
+	megaCfg := func(_ context.Context, _ MegaAPIWebhookConfig) error {
+		megaCfgCalled = true
+		return nil
+	}
+	var capturedCw ChatwootWebhookConfig
+	cwCfg := func(_ context.Context, c ChatwootWebhookConfig) error {
+		capturedCw = c
+		return nil
+	}
+	key := bridge.RandomBytes(32)
+	store := newStore()
+	store.data[settingBaseURL] = "https://bridge.example"
+	h, err := New(Deps{
+		Key:             key,
+		InsertTenant:    sink.insert,
+		GetSetting:      store.get,
+		SetSetting:      store.set,
+		ConfigWebhook:   megaCfg,
+		ConfigCwWebhook: cwCfg,
+	})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/tenants",
+		strings.NewReader(validWizardForm().Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	require.Equal(t, http.StatusFound, rr.Code)
+	require.True(t, megaCfgCalled, "megaAPI webhook must be configured")
+	require.Equal(t, "https://bridge.example/v1/cw/acme", capturedCw.WebhookURL,
+		"Chatwoot webhook URL must point at bridge tenant CW endpoint")
+	require.Equal(t, int64(5), capturedCw.AccountID)
+	require.Equal(t, int64(9), capturedCw.InboxID)
+	require.Equal(t, "https://cw.example", capturedCw.BaseURL)
+	require.Equal(t, "ctok", capturedCw.Token)
 }
 
 func TestWizardPOSTDuplicateSlugReturnsFriendlyConflict(t *testing.T) {

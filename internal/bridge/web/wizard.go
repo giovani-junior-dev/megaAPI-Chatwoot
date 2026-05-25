@@ -48,7 +48,24 @@ func (h *Handler) handleTenantCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.fireMegaAPIConfig(r, spec, bearer)
+	h.fireChatwootConfig(r, spec)
 	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func (h *Handler) fireChatwootConfig(r *http.Request, spec bridge.TenantSpec) {
+	if h.deps.ConfigCwWebhook == nil || h.deps.GetSetting == nil {
+		return
+	}
+	base, _ := h.deps.GetSetting(r.Context(), settingBaseURL)
+	if base == "" {
+		return
+	}
+	url := strings.TrimRight(base, "/") + "/v1/cw/" + spec.Slug
+	_ = h.deps.ConfigCwWebhook(r.Context(), ChatwootWebhookConfig{
+		BaseURL: spec.ChatwootURL, Token: spec.ChatwootToken,
+		AccountID: spec.ChatwootAccountID, InboxID: spec.ChatwootInboxID,
+		WebhookURL: url,
+	})
 }
 
 func (h *Handler) fireMegaAPIConfig(r *http.Request, spec bridge.TenantSpec, bearer string) {
