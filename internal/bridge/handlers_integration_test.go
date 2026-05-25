@@ -102,6 +102,74 @@ func TestHandleWAWebhook_AcceptsRightBearerAndQueues(t *testing.T) {
 	require.Equal(t, 1, len(s.Inbox))
 }
 
+func TestHandleWAWebhook_AcceptsBearerInQueryParam(t *testing.T) {
+	db := setupDB(t)
+	key := RandomBytes(32)
+	makeAuthedTenant(t, db, key, "demo-wa-qp", "qright", "h")
+	s := newServerWithDB(db, key, 4)
+
+	body := []byte(`{"key":{"id":"QP1","remoteJid":"5511@s"},"message":{"conversation":"hi"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/wa/demo-wa-qp?token=qright", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), "queued")
+}
+
+func TestHandleWAWebhook_RejectsWrongBearerInQuery(t *testing.T) {
+	db := setupDB(t)
+	key := RandomBytes(32)
+	makeAuthedTenant(t, db, key, "demo-wa-qpw", "qright", "h")
+	s := newServerWithDB(db, key, 4)
+
+	body := []byte(`{"key":{"id":"QP2","remoteJid":"5511@s"},"message":{"conversation":"hi"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/wa/demo-wa-qpw?token=wrong", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestHandleWAWebhook_HeaderTakesPrecedenceOverQuery(t *testing.T) {
+	db := setupDB(t)
+	key := RandomBytes(32)
+	makeAuthedTenant(t, db, key, "demo-wa-pre", "headerwins", "h")
+	s := newServerWithDB(db, key, 4)
+
+	body := []byte(`{"key":{"id":"QP3","remoteJid":"5511@s"},"message":{"conversation":"hi"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/wa/demo-wa-pre?token=wrong", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer headerwins")
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestHandleCWWebhook_RejectsMissingSignatureHeader(t *testing.T) {
+	db := setupDB(t)
+	key := RandomBytes(32)
+	makeAuthedTenant(t, db, key, "demo-cw-nosig", "b", "cw-secret-x")
+	s := newServerWithDB(db, key, 4)
+
+	body := []byte(`{"id":1,"event":"message_created","message_type":"outgoing","content":"hi"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/cw/demo-cw-nosig", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestHandleCWWebhook_RejectsMalformedSignatureHex(t *testing.T) {
+	db := setupDB(t)
+	key := RandomBytes(32)
+	makeAuthedTenant(t, db, key, "demo-cw-badhex", "b", "cw-secret-y")
+	s := newServerWithDB(db, key, 4)
+
+	body := []byte(`{"id":1,"event":"message_created","message_type":"outgoing","content":"hi"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/cw/demo-cw-badhex", bytes.NewReader(body))
+	req.Header.Set("X-Chatwoot-Signature", "not-valid-hex-zzz")
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
 func TestHandleCWWebhook_RejectsTamperedHMAC(t *testing.T) {
 	db := setupDB(t)
 	key := RandomBytes(32)

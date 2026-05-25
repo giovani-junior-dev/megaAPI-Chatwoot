@@ -134,6 +134,59 @@ func TestSettingsPOSTAcceptsValidHTTPSURL(t *testing.T) {
 	}
 }
 
+func TestValidateBaseURL(t *testing.T) {
+	cases := []struct {
+		name    string
+		val     string
+		wantErr bool
+	}{
+		{"empty", "", true},
+		{"missing_scheme", "example.com", true},
+		{"javascript_scheme", "javascript:alert(1)", true},
+		{"ftp_scheme", "ftp://example.com", true},
+		{"file_scheme", "file:///etc/passwd", true},
+		{"http_only_no_host", "http://", true},
+		{"https_only_no_host", "https://", true},
+		{"http_basic", "http://example.com", false},
+		{"https_basic", "https://example.com", false},
+		{"https_with_port", "https://example.com:8443", false},
+		{"https_with_path", "https://example.com/api/v1", false},
+		{"https_with_query", "https://example.com/?x=1", false},
+		{"https_localhost", "http://localhost", false},
+		{"https_ipv4", "http://10.0.0.1:8080", false},
+		{"https_trailing_slash", "https://example.com/", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateBaseURL(tc.val)
+			if tc.wantErr && err == nil {
+				t.Fatalf("%q: expected error", tc.val)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("%q: unexpected error: %v", tc.val, err)
+			}
+		})
+	}
+}
+
+func TestSettingsPOSTServiceUnavailableWhenNoSetter(t *testing.T) {
+	key := make([]byte, 32)
+	store := newStore()
+	h, err := New(Deps{GetSetting: store.get, Key: key})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	form := url.Values{"base_url": {"https://x.com"}}
+	req := httptest.NewRequest(http.MethodPost, "/settings/base_url", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 got %d", rr.Code)
+	}
+}
+
 func TestSettingsGETRequiresAuth(t *testing.T) {
 	h := newSettingsHandler(t, newStore())
 	req := httptest.NewRequest(http.MethodGet, "/settings", nil)

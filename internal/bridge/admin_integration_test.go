@@ -91,6 +91,69 @@ func TestAdminRetry_NotFoundOrAlreadyDoneReturns404(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, rec.Code)
 }
 
+func TestAdminFailed_AcceptsTokenInQueryParam(t *testing.T) {
+	db := setupDB(t)
+	key := RandomBytes(32)
+	s := newServerWithDB(db, key, 4)
+	s.Cfg.AdminToken = "qtoken"
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/failed?token=qtoken", nil)
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestAdminFailed_NoTokenConfiguredRejectsAll(t *testing.T) {
+	db := setupDB(t)
+	key := RandomBytes(32)
+	s := newServerWithDB(db, key, 4)
+	s.Cfg.AdminToken = ""
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/failed", nil)
+	req.Header.Set("Authorization", "Bearer anything")
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestAdminFailed_MissingAuthorizationReturns401(t *testing.T) {
+	db := setupDB(t)
+	key := RandomBytes(32)
+	s := newServerWithDB(db, key, 4)
+	s.Cfg.AdminToken = "x"
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/failed", nil)
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestAdminRetry_InvalidUUIDReturns400(t *testing.T) {
+	db := setupDB(t)
+	key := RandomBytes(32)
+	s := newServerWithDB(db, key, 4)
+	s.Cfg.AdminToken = "tok-badid"
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/retry/not-a-uuid", nil)
+	req.Header.Set("Authorization", "Bearer tok-badid")
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestAdminFailed_LimitDefaultsTo50(t *testing.T) {
+	db := setupDB(t)
+	key := RandomBytes(32)
+	s := newServerWithDB(db, key, 4)
+	s.Cfg.AdminToken = "tok-lim"
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/failed?limit=0", nil)
+	req.Header.Set("Authorization", "Bearer tok-lim")
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
 func TestAdminFailed_RejectsBearerMismatch(t *testing.T) {
 	db := setupDB(t)
 	key := RandomBytes(32)
