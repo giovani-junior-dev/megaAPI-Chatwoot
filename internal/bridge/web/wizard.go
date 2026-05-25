@@ -1,9 +1,13 @@
 package web
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/madeinlowcode/chatwoot-megaapi-bridge/internal/bridge"
 )
@@ -36,7 +40,11 @@ func (h *Handler) handleTenantCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := h.deps.InsertTenant(r.Context(), ti); err != nil {
-		http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
+		if isUniqueViolation(err) {
+			http.Error(w, fmt.Sprintf("Slug %q já existe — escolha outro identificador.", spec.Slug), http.StatusConflict)
+			return
+		}
+		http.Error(w, "erro ao salvar tenant", http.StatusInternalServerError)
 		return
 	}
 	h.fireMegaAPIConfig(r, spec, bearer)
@@ -83,6 +91,11 @@ func validateSpec(s bridge.TenantSpec) (bridge.TenantSpec, error) {
 		return s, errAllFieldsRequired
 	}
 	return s, nil
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 var errAllFieldsRequired = wizardErr("todos os campos são obrigatórios")

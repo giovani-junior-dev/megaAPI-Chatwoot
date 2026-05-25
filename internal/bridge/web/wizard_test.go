@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/madeinlowcode/chatwoot-megaapi-bridge/internal/bridge"
 )
@@ -126,6 +127,27 @@ func TestWizardPOSTRejectsMissingField(t *testing.T) {
 	h.Routes().ServeHTTP(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestWizardPOSTDuplicateSlugReturnsFriendlyConflict(t *testing.T) {
+	sink := &tenantSink{err: &pgconn.PgError{Code: "23505", ConstraintName: "tenants_slug_key"}}
+	h := newWizardHandler(t, sink, nil)
+	req := httptest.NewRequest(http.MethodPost, "/tenants",
+		strings.NewReader(validWizardForm().Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("status=%d want 409", rr.Code)
+	}
+	body := rr.Body.String()
+	if strings.Contains(body, "duplicate key value") || strings.Contains(body, "tenants_slug_key") {
+		t.Fatalf("response leaks raw SQL error: %s", body)
+	}
+	if !strings.Contains(body, "acme") || !strings.Contains(body, "já existe") {
+		t.Fatalf("expected friendly PT-BR slug error, got: %s", body)
 	}
 }
 
