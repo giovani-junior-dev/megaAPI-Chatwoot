@@ -1,12 +1,14 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/madeinlowcode/chatwoot-megaapi-bridge/internal/bridge"
@@ -39,7 +41,8 @@ func (h *Handler) handleTenantCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "crypto error", http.StatusInternalServerError)
 		return
 	}
-	if _, err := h.deps.InsertTenant(r.Context(), ti); err != nil {
+	id, err := h.deps.InsertTenant(r.Context(), ti)
+	if err != nil {
 		if isUniqueViolation(err) {
 			http.Error(w, fmt.Sprintf("Slug %q já existe — escolha outro identificador.", spec.Slug), http.StatusConflict)
 			return
@@ -49,7 +52,26 @@ func (h *Handler) handleTenantCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	h.fireMegaAPIConfig(r, spec, bearer)
 	h.fireChatwootConfig(r, spec)
+	h.pairChatwootHMAC(r.Context(), spec, id)
 	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func (h *Handler) pairChatwootHMAC(ctx context.Context, spec bridge.TenantSpec, id uuid.UUID) {
+	if h.deps.FetchCwHMAC == nil || h.deps.UpdateTenantHMAC == nil {
+		return
+	}
+	token, err := h.deps.FetchCwHMAC(ctx, ChatwootWebhookConfig{
+		BaseURL: spec.ChatwootURL, Token: spec.ChatwootToken,
+		AccountID: spec.ChatwootAccountID, InboxID: spec.ChatwootInboxID,
+	})
+	if err != nil || token == "" {
+		return
+	}
+	enc, err := bridge.Encrypt([]byte(token), h.deps.Key)
+	if err != nil {
+		return
+	}
+	_ = h.deps.UpdateTenantHMAC(ctx, id, enc)
 }
 
 func (h *Handler) fireChatwootConfig(r *http.Request, spec bridge.TenantSpec) {

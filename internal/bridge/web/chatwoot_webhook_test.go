@@ -53,6 +53,67 @@ func TestConfigureChatwootWebhook_ReturnsErrorOnNon2xx(t *testing.T) {
 	require.Contains(t, err.Error(), "401")
 }
 
+func TestFetchChatwootInboxHMAC_ReturnsToken(t *testing.T) {
+	var path, method, token string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		method = r.Method
+		token = r.Header.Get("api_access_token")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"hmac_token":"abc123","name":"x"}`))
+	}))
+	defer srv.Close()
+	got, err := FetchChatwootInboxHMAC(context.Background(), ChatwootWebhookConfig{
+		BaseURL: srv.URL, Token: "cw-tok", AccountID: 3, InboxID: 7,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "abc123", got)
+	require.Equal(t, http.MethodGet, method)
+	require.Equal(t, "/api/v1/accounts/3/inboxes/7", path)
+	require.Equal(t, "cw-tok", token)
+}
+
+func TestFetchChatwootInboxHMAC_EmptyTokenReturnsEmptyNoError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"name":"x"}`))
+	}))
+	defer srv.Close()
+	got, err := FetchChatwootInboxHMAC(context.Background(), ChatwootWebhookConfig{
+		BaseURL: srv.URL, Token: "x", AccountID: 1, InboxID: 1,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "", got)
+}
+
+func TestFetchChatwootInboxHMAC_ReturnsErrorOnNon2xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "boom", http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	_, err := FetchChatwootInboxHMAC(context.Background(), ChatwootWebhookConfig{
+		BaseURL: srv.URL, Token: "x", AccountID: 1, InboxID: 1,
+	})
+	require.Error(t, err)
+}
+
+func TestConfigureChatwootWebhook_EnablesHMAC(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	err := ConfigureChatwootWebhook(context.Background(), ChatwootWebhookConfig{
+		BaseURL: srv.URL, Token: "x", AccountID: 1, InboxID: 1,
+		WebhookURL: "https://b/v1/cw/x",
+	})
+	require.NoError(t, err)
+	channel, _ := body["channel"].(map[string]any)
+	require.Equal(t, true, channel["hmac_mandatory"])
+}
+
 func TestConfigureChatwootWebhook_TrimsBaseURLTrailingSlash(t *testing.T) {
 	var path string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

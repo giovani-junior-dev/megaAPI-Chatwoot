@@ -115,6 +115,12 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`
 	return id, err
 }
 
+func (d *DB) UpdateTenantHMAC(ctx context.Context, id uuid.UUID, enc []byte) error {
+	const q = `UPDATE tenants SET hmac_secret_enc = $1 WHERE id = $2`
+	_, err := d.Pool.Exec(ctx, q, enc, id)
+	return err
+}
+
 func (d *DB) UpsertContact(ctx context.Context, c Contact) error {
 	const q = `INSERT INTO contacts (tenant_id, wa_jid, cw_contact_id, cw_conversation_id, updated_at)
 VALUES ($1,$2,$3,$4,now())

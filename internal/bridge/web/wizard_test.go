@@ -171,6 +171,115 @@ func TestWizardPOSTFiresChatwootWebhookConfig(t *testing.T) {
 	require.Equal(t, "ctok", capturedCw.Token)
 }
 
+func TestWizardPOSTPairsHMACFromChatwoot(t *testing.T) {
+	sink := &tenantSink{}
+	megaCfg := func(_ context.Context, _ MegaAPIWebhookConfig) error { return nil }
+	cwCfg := func(_ context.Context, _ ChatwootWebhookConfig) error { return nil }
+	fetchedFor := ChatwootWebhookConfig{}
+	fetch := func(_ context.Context, c ChatwootWebhookConfig) (string, error) {
+		fetchedFor = c
+		return "chatwoot-hmac-secret", nil
+	}
+	var updatedID uuid.UUID
+	var updatedEnc []byte
+	update := func(_ context.Context, id uuid.UUID, enc []byte) error {
+		updatedID = id
+		updatedEnc = enc
+		return nil
+	}
+	key := bridge.RandomBytes(32)
+	store := newStore()
+	store.data[settingBaseURL] = "https://bridge.example"
+	h, err := New(Deps{
+		Key:              key,
+		InsertTenant:     sink.insert,
+		GetSetting:       store.get,
+		SetSetting:       store.set,
+		ConfigWebhook:    megaCfg,
+		ConfigCwWebhook:  cwCfg,
+		FetchCwHMAC:      fetch,
+		UpdateTenantHMAC: update,
+	})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/tenants",
+		strings.NewReader(validWizardForm().Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	require.Equal(t, http.StatusFound, rr.Code)
+	require.Equal(t, "https://cw.example", fetchedFor.BaseURL)
+	require.Equal(t, int64(5), fetchedFor.AccountID)
+	require.Equal(t, int64(9), fetchedFor.InboxID)
+	require.Equal(t, sink.id, updatedID)
+	require.NotEmpty(t, updatedEnc)
+	dec, err := bridge.Decrypt(updatedEnc, key)
+	require.NoError(t, err)
+	require.Equal(t, "chatwoot-hmac-secret", string(dec))
+}
+
+func TestWizardPOSTPairHMACFailureDoesNotBlockTenant(t *testing.T) {
+	sink := &tenantSink{}
+	megaCfg := func(_ context.Context, _ MegaAPIWebhookConfig) error { return nil }
+	cwCfg := func(_ context.Context, _ ChatwootWebhookConfig) error { return nil }
+	fetch := func(_ context.Context, _ ChatwootWebhookConfig) (string, error) {
+		return "", errAllFieldsRequired
+	}
+	updateCalled := false
+	update := func(_ context.Context, _ uuid.UUID, _ []byte) error {
+		updateCalled = true
+		return nil
+	}
+	key := bridge.RandomBytes(32)
+	store := newStore()
+	store.data[settingBaseURL] = "https://bridge.example"
+	h, err := New(Deps{
+		Key: key, InsertTenant: sink.insert, GetSetting: store.get, SetSetting: store.set,
+		ConfigWebhook: megaCfg, ConfigCwWebhook: cwCfg,
+		FetchCwHMAC: fetch, UpdateTenantHMAC: update,
+	})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/tenants",
+		strings.NewReader(validWizardForm().Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	require.Equal(t, http.StatusFound, rr.Code)
+	require.False(t, updateCalled, "update must not be called when fetch fails")
+}
+
+func TestWizardPOSTPairHMACEmptyTokenSkipsUpdate(t *testing.T) {
+	sink := &tenantSink{}
+	megaCfg := func(_ context.Context, _ MegaAPIWebhookConfig) error { return nil }
+	cwCfg := func(_ context.Context, _ ChatwootWebhookConfig) error { return nil }
+	fetch := func(_ context.Context, _ ChatwootWebhookConfig) (string, error) {
+		return "", nil
+	}
+	updateCalled := false
+	update := func(_ context.Context, _ uuid.UUID, _ []byte) error {
+		updateCalled = true
+		return nil
+	}
+	key := bridge.RandomBytes(32)
+	store := newStore()
+	store.data[settingBaseURL] = "https://bridge.example"
+	h, err := New(Deps{
+		Key: key, InsertTenant: sink.insert, GetSetting: store.get, SetSetting: store.set,
+		ConfigWebhook: megaCfg, ConfigCwWebhook: cwCfg,
+		FetchCwHMAC: fetch, UpdateTenantHMAC: update,
+	})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/tenants",
+		strings.NewReader(validWizardForm().Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	require.Equal(t, http.StatusFound, rr.Code)
+	require.False(t, updateCalled)
+}
+
 func TestWizardPOSTDuplicateSlugReturnsFriendlyConflict(t *testing.T) {
 	sink := &tenantSink{err: &pgconn.PgError{Code: "23505", ConstraintName: "tenants_slug_key"}}
 	h := newWizardHandler(t, sink, nil)

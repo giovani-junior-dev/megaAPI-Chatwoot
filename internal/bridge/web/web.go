@@ -24,7 +24,9 @@ type Deps struct {
 	FetchInboxes    func(context.Context, discoverReq) ([]Inbox, error)
 	InsertTenant    func(context.Context, bridge.TenantInsert) (uuid.UUID, error)
 	ConfigWebhook   func(context.Context, MegaAPIWebhookConfig) error
-	ConfigCwWebhook func(context.Context, ChatwootWebhookConfig) error
+	ConfigCwWebhook  func(context.Context, ChatwootWebhookConfig) error
+	FetchCwHMAC      func(context.Context, ChatwootWebhookConfig) (string, error)
+	UpdateTenantHMAC func(context.Context, uuid.UUID, []byte) error
 	TenantSummaries func(context.Context) ([]bridge.TenantSummary, error)
 	GetTenant       func(context.Context, string) (bridge.Tenant, error)
 	PingDB          func(context.Context) error
@@ -59,7 +61,9 @@ func NewFromDB(db *bridge.DB, key []byte) (*Handler, error) {
 		SetSetting:      db.SetSetting,
 		InsertTenant:    db.InsertTenant,
 		ConfigWebhook:   ConfigureMegaAPIWebhook,
-		ConfigCwWebhook: ConfigureChatwootWebhook,
+		ConfigCwWebhook:  ConfigureChatwootWebhook,
+		FetchCwHMAC:      FetchChatwootInboxHMAC,
+		UpdateTenantHMAC: db.UpdateTenantHMAC,
 		TenantSummaries: db.TenantSummaries,
 		GetTenant:       db.GetTenantBySlug,
 		PingDB:          db.Pool.Ping,

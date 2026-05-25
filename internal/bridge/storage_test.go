@@ -82,6 +82,23 @@ func TestInsertTenant_RoundTrip(t *testing.T) {
 	require.Equal(t, id, got.ID)
 }
 
+func TestUpdateTenantHMAC_RoundTrip(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	id, err := db.InsertTenant(ctx, TenantInsert{
+		Slug: "hmacdemo", MegaAPIHost: "https://x", MegaAPIInstance: "i",
+		MegaAPITokenEnc: []byte("a"), ChatwootURL: "https://c", ChatwootTokenEnc: []byte("b"),
+		ChatwootAccountID: 1, ChatwootInboxID: 2,
+		HMACSecretEnc: []byte("old"), WebhookBearerEnc: []byte("w"),
+	})
+	require.NoError(t, err)
+	newSecret := []byte("new-encrypted-secret")
+	require.NoError(t, db.UpdateTenantHMAC(ctx, id, newSecret))
+	got, err := db.GetTenantBySlug(ctx, "hmacdemo")
+	require.NoError(t, err)
+	require.Equal(t, newSecret, got.HMACSecretEnc)
+}
+
 func TestInsertTenant_AcceptsLargeChatwootIDs(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
