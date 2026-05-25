@@ -25,6 +25,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - (none)
 
+## [1.0.1] - 2026-05-25
+
+Post-release wizard hardening uncovered during QA sweep + the first day of the
+self-pilot burn-in. No schema migrations; safe drop-in over v1.0.0.
+
+### Added
+
+- **Wizard auto-config Chatwoot inbox webhook** (commit `b204e66`). On tenant
+  create the bridge now PATCHes the Chatwoot API inbox so the operator no
+  longer has to paste a webhook URL by hand.
+- **Wizard auto-pairs HMAC secret** (commit `02b871d`). Bridge reads the
+  Chatwoot inbox `channel.secret` after create, encrypts it with
+  `BRIDGE_ENCRYPTION_KEY`, and persists it on the tenant row — no manual
+  copy/paste of the HMAC token.
+- **QA sweep test coverage** (commit `7cbb94d`). Expanded unit tests around
+  auth, admin guards, and URL validation. Total now: **231 unit tests + 301
+  integration tests** passing.
+
+### Fixed
+
+- **Tenant slug duplicate now returns 409 + PT-BR friendly message**
+  (commit `9f67d6e`). Previously a `pgconn.PgError` with code `23505` leaked
+  raw SQL details (BUG-002). Wizard now maps the unique-violation to a clean
+  user-facing error.
+- **`settings.base_url` is validated for scheme + host** (commit `ccd56b6`).
+  The wizard rejected silently when `base_url` was missing or malformed
+  (BUG-QA-01); it now returns a 400 with a PT-BR explanation.
+- **Wizard refuses to create a tenant when `settings.base_url` is empty**
+  (commit `b57832c`). Closes BUG-WIZARD-01 — the previous behaviour silently
+  skipped Chatwoot inbox provisioning and left the tenant half-onboarded.
+- **HMAC pairing uses Chatwoot `channel.secret`, not the deprecated
+  `hmac_token` field** (commit `7fe688a`). Closes BUG-HMAC-01 — the bridge
+  was reading a field that Chatwoot no longer uses to sign
+  `api_inbox_webhook` events, so signature verification failed for every
+  inbound CW message.
+
+### Notes
+
+- Operational lesson captured in `CLAUDE.md`: rebuild the Docker image before
+  every live-test cycle (BUG-001, non-code). Stale containers were the root
+  cause of multiple "fix doesn't seem to work" loops during the QA sweep.
+- `docs/POSTMORTEM-QA-SESSION.md` collects the five bugs above with timeline,
+  root cause, and remediation.
+
 ## [1.0.0] - 2026-05-24
 
 ### Added
@@ -81,5 +125,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - See `docs/release/RELEASE_NOTES.md` for the full upgrade story from 0.x and
   for the supported configuration matrix.
 
-[Unreleased]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/releases/tag/v1.0.0

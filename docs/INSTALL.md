@@ -114,6 +114,21 @@ skips Cloudflare tunnel creation if `deploy/.env.tunnel` already exists,
 and Docker Compose itself is responsible for recreating only changed
 containers.
 
+### Post-install: configure `settings.base_url` before creating any tenant
+
+Since v1.0.1 the tenant wizard refuses to create a tenant if
+`settings.base_url` is empty or malformed. Set it once on first admin
+login:
+
+`Admin UI → Settings → base_url`. The value must be a full URL with
+`scheme` (`http` or `https`) and `host` — for example
+`https://bridge.example.com`. It is the public URL the bridge advertises
+to megaAPI and Chatwoot when registering webhooks, so it must resolve
+externally.
+
+If you skip this step the wizard returns a PT-BR 400 explaining the
+problem; no tenant row is inserted. Fix `base_url` and retry.
+
 ---
 
 ## 3. Post-install verification

@@ -59,6 +59,36 @@ The installer:
 
 ### Adding a tenant
 
+Two paths. Use the **wizard** for normal onboarding; the **CLI** is the
+break-glass alternative.
+
+#### Wizard (recommended, since v1.0.1)
+
+`Admin UI → Tenants → Novo Tenant` walks the operator through 4 steps and
+automatically:
+
+1. Validates `settings.base_url` (scheme + host). Refuses to start if it is
+   empty or malformed (PT-BR 400). `base_url` is the bridge's public URL —
+   the value that goes inside webhook URLs registered on megaAPI and
+   Chatwoot.
+2. Discovers Chatwoot inboxes via `POST /tenants/discover-inboxes` and lets
+   the operator pick one (or refuses if megaAPI/Chatwoot creds are wrong).
+3. Calls megaAPI `configWebhook` to point the WhatsApp instance at
+   `<base_url>/v1/wa/{slug}?token=<bridge-bearer>`.
+4. PATCHes the chosen Chatwoot api_inbox with
+   `webhook_url=<base_url>/v1/cw/{slug}` so the inbox starts firing
+   `api_inbox_webhook` events into the bridge.
+5. Reads back `channel.secret` from the same Chatwoot inbox (this is the
+   HMAC signing key — **not** the deprecated `hmac_token` field), encrypts
+   it with `BRIDGE_ENCRYPTION_KEY`, and persists it on the tenant row so
+   `VerifyHMAC` on `/v1/cw/{slug}` succeeds.
+
+If any step fails the wizard rolls back the partial tenant row so retrying
+is safe. Duplicate slug returns 409 with a PT-BR explanation (no raw SQL
+leak).
+
+#### CLI (break-glass)
+
 ```bash
 docker compose exec bridge bridge tenant add \
   --slug demo \
@@ -69,8 +99,12 @@ docker compose exec bridge bridge tenant add \
   --chatwoot-hmac-secret <hmac>
 ```
 
-Webhook URL to register in megaAPI:
+Webhook URL to register manually in megaAPI:
 `https://bridge.example.com/v1/wa/demo?token=<bridge-bearer>`
+
+The CLI path does **not** auto-provision the Chatwoot inbox webhook — the
+operator must PATCH it by hand, or re-onboard via the wizard. Use the CLI
+only when the admin UI is unreachable.
 
 ## Upgrade
 
@@ -306,5 +340,5 @@ should:
 ---
 
 Owner: Bridge SRE on-call rotation.
-Last reviewed: 2026-05-24 (v1.0.0 release readiness).
+Last reviewed: 2026-05-25 (v1.0.1 wizard hardening — see POSTMORTEM-QA-SESSION.md).
 Re-review trigger: any change to the deploy topology, secret model, or worker model.

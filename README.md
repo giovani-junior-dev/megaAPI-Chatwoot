@@ -4,6 +4,19 @@ Open-source HTTP bridge between **megaAPI** (WhatsApp) and **Chatwoot**, multi-t
 flat-first Go implementation. One binary, three tables, in-process channels —
 no Redis, no Worker pool service, no microservices.
 
+**Latest:** [`v1.0.1`](https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/releases) — wizard hardening (auto-config Chatwoot inbox webhook, HMAC pairing via `channel.secret`, slug duplicate friendly 409, `base_url` validation). See [CHANGELOG](./CHANGELOG.md) and [v1.0.0 release notes](./docs/release/RELEASE_NOTES.md).
+
+## v1.0.x feature set
+
+| Epic | Status | What you get |
+|------|--------|--------------|
+| F1 — MVP texto | Done | Bidirectional WhatsApp ↔ Chatwoot text, multi-tenant, Bearer/HMAC, idempotency |
+| F2 — Mídia + reliability | Done | Image / audio / video / document / sticker + GIF + multi-attachment, in-process retry queue, DLQ |
+| F3 — Admin UI | Done | Tenant wizard (4 steps, auto-provisions both webhooks), message log, DLQ, diagnostic 1-click, pt-BR |
+| F4 — One-command installer | Done | `install.sh` interactive, Caddy or Cloudflare Tunnel, backup sidecar, `upgrade.sh` with auto-rollback |
+| F5 — Observability | Done | Prometheus + Grafana + AlertManager overlay, OTel opt-in, admin-gated `/debug/pprof` |
+| F6 — Hardening + 1.0 | Done (gates) / self-pilot in progress | gosec/nuclei/ZAP harness, k6 smoke/24h/spike, chaos kill-and-recover, full runbooks |
+
 ## Quickstart (5 commands)
 
 ```bash

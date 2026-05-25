@@ -112,3 +112,28 @@ the plan first:
   Wrap with `notRetriable(err)` to short-circuit the retry loop.
 - **Crypto primitives** (`Encrypt`, `Decrypt`, `VerifyHMAC`) live in
   `crypto.go` and use `crypto/subtle` for comparisons.
+
+## Lessons Learned (post-v1.0.0 session, 2026-05-24 → 2026-05-25)
+
+These were paid for in real debugging time. Read them before live-testing.
+
+- **Rebuild the Docker image before every live-test cycle.** A stale
+  `bridge` container will silently run a previous binary even after `git pull`
+  and `docker compose restart`. Use
+  `docker compose build bridge && docker compose up -d bridge` (or
+  `docker compose up -d --build bridge`) every time. Multiple "fix didn't
+  apply" loops in the QA sweep traced back to this.
+- **HMAC pairing uses Chatwoot `channel.secret`, NOT `hmac_token`.** Chatwoot
+  3.x signs `api_inbox_webhook` events with the inbox-level `channel.secret`
+  field on `GET /api/v1/accounts/{id}/inboxes/{id}`. The deprecated top-level
+  `hmac_token` is no longer used. The wizard fetches `channel.secret` after
+  inbox provisioning, encrypts it with `BRIDGE_ENCRYPTION_KEY`, and persists
+  on the tenant row. Do not "fix" this back to `hmac_token`.
+- **`settings.base_url` is required before any tenant is created.** The
+  wizard now hard-fails with a PT-BR 400 if it is empty (and validates
+  scheme + host when present). Without it the bridge cannot register
+  `api_inbox_webhook` on Chatwoot — silent skip used to leave tenants
+  half-onboarded.
+- **Slug duplicates surface `pgconn.PgError.Code == "23505"`.** Map it to a
+  409 with a clean PT-BR message in the wizard; do not let the raw SQL
+  error escape to the operator.

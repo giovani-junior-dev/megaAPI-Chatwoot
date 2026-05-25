@@ -59,14 +59,20 @@ curl -sS http://localhost:8090/metrics | grep -E "^bridge_(messages|queue|job)"
 - `gosec` baseline: 0 HIGH (commit 6f9b164)
 - Incidents: 0
 
-### Day 1 — 2026-05-25 (preencher)
-- Msgs hoje: __
-- Failed hoje: __
-- DLQ growth %: __
-- p99 latency: __
-- Health: __
-- Incidents: __
-- Notas: __
+### Day 1 — 2026-05-25
+- Msgs hoje: a preencher pelo operador (query SQL listada acima)
+- Failed hoje: a preencher
+- DLQ growth %: a preencher
+- p99 latency: a preencher
+- Health: `/healthz` 200 + `/readyz` 200 esperado (sanidade após QA sweep)
+- Incidents: nenhum SEV1/SEV2 reportado
+- Notas:
+  - QA sweep concluído (commits `9f67d6e`, `ccd56b6`, `7cbb94d`, `225f908`,
+    `02b871d`, `b204e66`, `7fe688a`, `b57832c`) — wizard agora auto-provisiona
+    webhook Chatwoot + pareia HMAC via `channel.secret`.
+  - Bumping para v1.0.1 (não bloqueia o pilot — schema unchanged, drop-in).
+  - Lição operacional adicionada em `CLAUDE.md`: rebuild Docker antes de
+    cada live-test.
 
 ### Day 2 — 2026-05-26
 - (preencher)
