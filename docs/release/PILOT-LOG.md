@@ -60,19 +60,30 @@ curl -sS http://localhost:8090/metrics | grep -E "^bridge_(messages|queue|job)"
 - Incidents: 0
 
 ### Day 1 — 2026-05-25
-- Msgs hoje: a preencher pelo operador (query SQL listada acima)
-- Failed hoje: a preencher
-- DLQ growth %: a preencher
-- p99 latency: a preencher
-- Health: `/healthz` 200 + `/readyz` 200 esperado (sanidade após QA sweep)
-- Incidents: nenhum SEV1/SEV2 reportado
+- Msgs hoje (DB): 8 done (4 in + 4 out), 0 pending, 0 failed
+- Failed hoje: 0
+- DLQ growth %: 0.000% (threshold <0.5% — OK)
+- Latência (4 amostras in + 4 out, histograma Prometheus):
+  - in: avg 0.77s, todas dentro do bucket ≤2.5s (2/4 ≤0.25s)
+  - out: avg 1.81s, todas dentro do bucket ≤2.5s
+  - **p99 indeterminado** com sample N=4. Threshold <500ms exige mais tráfego pra validar. Acompanhar Day 2+ com mais volume.
+- Stale pending (>1h): 0 (janitor working)
+- Health: `/healthz` 200, `/readyz` 200, `/metrics` 200
+- Queue depth (snapshot): inbox=0, outbox=0
+- Incidents: 0 SEV1, 0 SEV2
+- Tag liberada: `v1.0.1` published GitHub release
+- Reset completo executado: Chatwoot inbox + conversations + contacts apagados; bridge tenants + messages + contacts + settings truncados; novo tenant criado from-scratch via wizard 4-passos com instância megaAPI real
+- Wizard E2E PASS: WA→CW (msg WhatsApp chega no Chatwoot) + CW→WA (resposta agente chega no WhatsApp) ambos verificados manualmente
 - Notas:
   - QA sweep concluído (commits `9f67d6e`, `ccd56b6`, `7cbb94d`, `225f908`,
     `02b871d`, `b204e66`, `7fe688a`, `b57832c`) — wizard agora auto-provisiona
     webhook Chatwoot + pareia HMAC via `channel.secret`.
-  - Bumping para v1.0.1 (não bloqueia o pilot — schema unchanged, drop-in).
+  - v1.0.1 published (drop-in sobre v1.0.0, schema unchanged).
   - Lição operacional adicionada em `CLAUDE.md`: rebuild Docker antes de
     cada live-test.
+  - Stack endpoints externos:
+    - Bridge ngrok: `https://5bc7-2804-d59-b908-7900-85bc-9cec-1c9e-b205.ngrok-free.app`
+    - Chatwoot cloudflared: `https://secondary-cutting-optical-pod.trycloudflare.com`
 
 ### Day 2 — 2026-05-26
 - (preencher)
