@@ -99,14 +99,40 @@ func (h *Handler) Routes() http.Handler {
 	return r
 }
 
+type indexRow struct {
+	Slug     string
+	Count24h int64
+	PairLink string
+	Paired   bool
+	LastJID  string
+}
+
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
-	var summaries []bridge.TenantSummary
-	if h.deps.TenantSummaries != nil {
-		if s, err := h.deps.TenantSummaries(r.Context()); err == nil {
-			summaries = s
-		}
+	rows := h.buildIndexRows(r)
+	h.render(w, "index.html", page{Title: "Painel", Data: rows})
+}
+
+func (h *Handler) buildIndexRows(r *http.Request) []indexRow {
+	if h.deps.TenantSummaries == nil {
+		return nil
 	}
-	h.render(w, "index.html", page{Title: "Painel", Data: summaries})
+	summaries, err := h.deps.TenantSummaries(r.Context())
+	if err != nil {
+		return nil
+	}
+	var base string
+	if h.deps.GetSetting != nil {
+		base, _ = h.deps.GetSetting(r.Context(), settingBaseURL)
+	}
+	out := make([]indexRow, 0, len(summaries))
+	for _, s := range summaries {
+		row := indexRow{Slug: s.Slug, Count24h: s.Count24h, LastJID: s.LastJID, Paired: s.PairedAt != nil}
+		if base != "" {
+			row.PairLink = BuildPairLink(PairLinkParams{BaseURL: base, Slug: s.Slug}, h.deps.Key)
+		}
+		out = append(out, row)
+	}
+	return out
 }
 
 type page struct {

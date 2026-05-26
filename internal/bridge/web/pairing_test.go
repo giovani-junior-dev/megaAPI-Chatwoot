@@ -210,6 +210,109 @@ func TestPairLogout_ProxiesMegaAPI(t *testing.T) {
 	}
 }
 
+func TestPairCode_MissingPhone(t *testing.T) {
+	megaSrv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("megaapi should not be called")
+	}))
+	defer megaSrv.Close()
+	h, key := newPairHandler(t, megaSrv)
+	req := httptest.NewRequest(http.MethodPost, validPairURL("acme", key, "/pair/acme/code"), nil)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestPairCode_JSONBody(t *testing.T) {
+	megaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("phoneNumber") != "551188888" {
+			t.Fatalf("phone=%s", r.URL.Query().Get("phoneNumber"))
+		}
+		_, _ = w.Write([]byte(`{"pairingCode":"JS-1"}`))
+	}))
+	defer megaSrv.Close()
+	h, key := newPairHandler(t, megaSrv)
+	body := strings.NewReader(`{"phone":"551188888"}`)
+	req := httptest.NewRequest(http.MethodPost, validPairURL("acme", key, "/pair/acme/code"), body)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "JS-1") {
+		t.Fatalf("body=%s", rr.Body.String())
+	}
+}
+
+func TestPairQR_MegaAPIError(t *testing.T) {
+	megaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer megaSrv.Close()
+	h, key := newPairHandler(t, megaSrv)
+	req := httptest.NewRequest(http.MethodGet, validPairURL("acme", key, "/pair/acme/qr"), nil)
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestPairStatus_MegaAPIError(t *testing.T) {
+	megaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer megaSrv.Close()
+	h, key := newPairHandler(t, megaSrv)
+	req := httptest.NewRequest(http.MethodGet, validPairURL("acme", key, "/pair/acme/status"), nil)
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestPairLogout_MegaAPIError(t *testing.T) {
+	megaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer megaSrv.Close()
+	h, key := newPairHandler(t, megaSrv)
+	req := httptest.NewRequest(http.MethodPost, validPairURL("acme", key, "/pair/acme/logout"), nil)
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestPair_TenantNotFound(t *testing.T) {
+	megaSrv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer megaSrv.Close()
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i)
+	}
+	h, err := New(Deps{
+		Key: key,
+		GetTenant: func(_ context.Context, _ string) (bridge.Tenant, error) {
+			return bridge.Tenant{}, bridge.ErrNotFound
+		},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, validPairURL("nope", key, "/pair/nope/qr"), nil)
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestBuildPairLink(t *testing.T) {
 	key := []byte("0123456789abcdef0123456789abcdef")
 	link := BuildPairLink(PairLinkParams{BaseURL: "https://bridge.example", Slug: "acme", TTLSeconds: 3600}, key)

@@ -7,14 +7,23 @@
   {{if .Data}}
   <table class="w-full text-sm bg-white border border-slate-200 rounded overflow-hidden">
     <thead class="bg-slate-100">
-      <tr><th class="text-left px-3 py-2">Slug</th><th class="text-right px-3 py-2">Mensagens (24h)</th><th class="px-3 py-2"></th></tr>
+      <tr>
+        <th class="text-left px-3 py-2">Slug</th>
+        <th class="text-right px-3 py-2">Mensagens (24h)</th>
+        <th class="text-left px-3 py-2">Pareado</th>
+        <th class="px-3 py-2"></th>
+      </tr>
     </thead>
     <tbody>
     {{range .Data}}
       <tr class="border-t">
         <td class="px-3 py-2 font-mono">{{.Slug}}</td>
         <td class="px-3 py-2 text-right">{{.Count24h}}</td>
-        <td class="px-3 py-2 text-right text-xs">
+        <td class="px-3 py-2">
+          {{if .Paired}}<span class="text-emerald-700">{{.LastJID}}</span>{{else}}<span class="text-slate-400">não</span>{{end}}
+        </td>
+        <td class="px-3 py-2 text-right text-xs space-x-3">
+          {{if .PairLink}}<a href="{{.PairLink}}" target="_blank" class="text-slate-900 underline">Gerar link de pareamento</a>{{end}}
           <a href="/tenants/{{.Slug}}/diag" class="text-slate-600 hover:underline">diagnóstico</a>
         </td>
       </tr>
