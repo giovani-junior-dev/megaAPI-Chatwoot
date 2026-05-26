@@ -8,10 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (none)
+- Self-service WhatsApp pairing flow. Admins generate a per-tenant HMAC-signed
+  link (`/pair/{slug}?t=<hmac>&exp=<unix>`, 24h TTL) and share it with the end
+  customer. The pairing page exposes both QR code and pairing-code flows,
+  polls every 3s, and surfaces the live connection state. megaAPI tokens
+  never leave the server.
+- Migration `0004_pairing.sql` adds `tenants.paired_at` and `tenants.last_jid`.
+- Webhook handler now reacts to `messageType=connection_update` with
+  `message=phone_connected` and persists pairing state.
 
 ### Changed
-- (none)
+- Admin dashboard now lists each tenant's pairing link with copy-to-clipboard
+  and last-paired timestamp.
 
 ### Deprecated
 - (none)
@@ -23,7 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (none)
 
 ### Security
-- (none)
+- Pairing endpoints require HMAC-SHA256 over `slug|exp` keyed with
+  `BRIDGE_ENCRYPTION_KEY`. Missing / invalid / expired token returns 401.
+  Slug alone is insufficient to access pairing controls.
 
 ## [1.0.1] - 2026-05-25
 
