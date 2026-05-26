@@ -38,6 +38,31 @@ func TestDashboardListsTenantsWithCounts(t *testing.T) {
 	}
 }
 
+func TestDashboardShowsPairLink(t *testing.T) {
+	summaries := func(context.Context) ([]bridge.TenantSummary, error) {
+		return []bridge.TenantSummary{{Slug: "acme", Count24h: 1}}, nil
+	}
+	getSetting := func(_ context.Context, k string) (string, error) {
+		if k == settingBaseURL {
+			return "https://bridge.example", nil
+		}
+		return "", nil
+	}
+	key := make([]byte, 32)
+	h, _ := New(Deps{Key: key, TenantSummaries: summaries, GetSetting: getSetting})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	body := rr.Body.String()
+	if !strings.Contains(body, "https://bridge.example/pair/acme?t=") {
+		t.Fatalf("pair link missing: %s", body)
+	}
+	if !strings.Contains(body, "Gerar link de pareamento") {
+		t.Fatalf("link label missing")
+	}
+}
+
 func TestDashboardEmptyShowsCTA(t *testing.T) {
 	summaries := func(context.Context) ([]bridge.TenantSummary, error) {
 		return nil, nil
