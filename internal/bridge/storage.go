@@ -24,6 +24,8 @@ type Tenant struct {
 	ChatwootInboxID   int64
 	HMACSecretEnc     []byte
 	WebhookBearerEnc  []byte
+	PairedAt          *time.Time
+	LastJID           string
 }
 
 type Contact struct {
@@ -79,15 +81,23 @@ func (d *DB) Close() {
 func (d *DB) GetTenantBySlug(ctx context.Context, slug string) (Tenant, error) {
 	const q = `SELECT id, slug, megaapi_host, megaapi_instance, megaapi_token_enc,
 chatwoot_url, chatwoot_token_enc, chatwoot_account_id, chatwoot_inbox_id,
-hmac_secret_enc, webhook_bearer_enc FROM tenants WHERE slug = $1`
+hmac_secret_enc, webhook_bearer_enc, paired_at, COALESCE(last_jid,'')
+FROM tenants WHERE slug = $1`
 	var t Tenant
 	err := d.Pool.QueryRow(ctx, q, slug).Scan(&t.ID, &t.Slug, &t.MegaAPIHost,
 		&t.MegaAPIInstance, &t.MegaAPITokenEnc, &t.ChatwootURL, &t.ChatwootTokenEnc,
-		&t.ChatwootAccountID, &t.ChatwootInboxID, &t.HMACSecretEnc, &t.WebhookBearerEnc)
+		&t.ChatwootAccountID, &t.ChatwootInboxID, &t.HMACSecretEnc, &t.WebhookBearerEnc,
+		&t.PairedAt, &t.LastJID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Tenant{}, ErrNotFound
 	}
 	return t, err
+}
+
+func (d *DB) UpdateTenantPairing(ctx context.Context, id uuid.UUID, jid string) error {
+	const q = `UPDATE tenants SET paired_at = now(), last_jid = $2 WHERE id = $1`
+	_, err := d.Pool.Exec(ctx, q, id, jid)
+	return err
 }
 
 type TenantInsert struct {
@@ -258,12 +268,14 @@ RETURNING id, tenant_id, direction, external_id, status, attempts,
 }
 
 type TenantSummary struct {
-	Slug      string
-	Count24h  int64
+	Slug     string
+	Count24h int64
+	PairedAt *time.Time
+	LastJID  string
 }
 
 func (d *DB) TenantSummaries(ctx context.Context) ([]TenantSummary, error) {
-	const q = `SELECT t.slug, COALESCE(c.cnt, 0)
+	const q = `SELECT t.slug, COALESCE(c.cnt, 0), t.paired_at, COALESCE(t.last_jid,'')
 FROM tenants t LEFT JOIN (
   SELECT tenant_id, COUNT(*) cnt FROM messages
   WHERE created_at > now() - interval '24 hours' GROUP BY tenant_id
@@ -276,7 +288,7 @@ FROM tenants t LEFT JOIN (
 	var out []TenantSummary
 	for rows.Next() {
 		var s TenantSummary
-		if err := rows.Scan(&s.Slug, &s.Count24h); err != nil {
+		if err := rows.Scan(&s.Slug, &s.Count24h, &s.PairedAt, &s.LastJID); err != nil {
 			return nil, err
 		}
 		out = append(out, s)

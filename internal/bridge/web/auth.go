@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/madeinlowcode/chatwoot-megaapi-bridge/internal/bridge"
 )
@@ -21,7 +22,7 @@ func (h *Handler) requireAuth(next http.Handler) http.Handler {
 }
 
 func isPublicPath(p string) bool {
-	return p == "/login" || p == "/logout"
+	return p == "/login" || p == "/logout" || strings.HasPrefix(p, "/pair/")
 }
 
 func (h *Handler) currentAdmin(r *http.Request) string {

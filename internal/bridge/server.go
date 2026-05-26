@@ -143,6 +143,15 @@ func (s *Server) handleWAWebhook(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if jid, isPair := extractWAConnectionUpdate(body); isPair {
+		if err := s.DB.UpdateTenantPairing(r.Context(), tenant.ID, jid); err != nil {
+			s.Log.Err(err).Str("tenant_id", tenant.ID.String()).Msg("update tenant pairing")
+			http.Error(w, "db error", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "paired"})
+		return
+	}
 	if waIsFromMe(body) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ignored_from_me"})
 		return

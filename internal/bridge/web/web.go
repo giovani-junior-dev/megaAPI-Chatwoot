@@ -91,6 +91,11 @@ func (h *Handler) Routes() http.Handler {
 	r.Get("/messages", h.handleMessages)
 	r.Get("/dlq", h.handleDLQ)
 	r.Post("/dlq/retry/{id}", h.handleDLQRetry)
+	r.Get("/pair/{slug}", h.handlePairLanding)
+	r.Get("/pair/{slug}/qr", h.handlePairQR)
+	r.Post("/pair/{slug}/code", h.handlePairCode)
+	r.Post("/pair/{slug}/logout", h.handlePairLogout)
+	r.Get("/pair/{slug}/status", h.handlePairStatus)
 	return r
 }
 
