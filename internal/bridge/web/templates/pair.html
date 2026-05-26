@@ -1,0 +1,104 @@
+{{define "content"}}
+<section class="space-y-6" x-data="pairApp()" x-init="init()">
+  <header class="space-y-1">
+    <h1 class="text-2xl font-semibold">Pareamento WhatsApp</h1>
+    <p class="text-sm text-slate-600">Tenant: <span class="font-mono">{{.Data.Slug}}</span></p>
+    <p class="text-sm">Status: <span class="font-mono px-2 py-1 rounded bg-slate-100" x-text="status"></span></p>
+  </header>
+  <div class="border-b border-slate-200 flex space-x-4 text-sm">
+    <button type="button" class="px-3 py-2 -mb-px border-b-2"
+            :class="tab==='qr' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-500'"
+            @click="tab='qr'">QR Code</button>
+    <button type="button" class="px-3 py-2 -mb-px border-b-2"
+            :class="tab==='code' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-500'"
+            @click="tab='code'">Pairing Code</button>
+  </div>
+  <div x-show="tab==='qr'" class="space-y-3">
+    <p class="text-sm text-slate-600">Abra o WhatsApp e escaneie o QR. Atualiza a cada 3s.</p>
+    <div class="bg-white p-4 inline-block border border-slate-200 rounded">
+      <template x-if="qr">
+        <img :src="qr" alt="QR" class="w-64 h-64">
+      </template>
+      <template x-if="!qr">
+        <div class="w-64 h-64 flex items-center justify-center text-sm text-slate-400">carregando…</div>
+      </template>
+    </div>
+  </div>
+  <div x-show="tab==='code'" class="space-y-3">
+    <form @submit.prevent="reqCode" class="space-y-2 max-w-sm">
+      <label class="block text-sm">
+        Telefone (DDI+DDD+numero)
+        <input x-model="phone" type="text" name="phone" required
+               class="block w-full px-3 py-2 border border-slate-300 rounded">
+      </label>
+      <button type="submit" class="bg-slate-900 text-white text-sm px-4 py-2 rounded">Gerar código</button>
+    </form>
+    <template x-if="code">
+      <p class="text-2xl font-mono tracking-widest" x-text="code"></p>
+    </template>
+  </div>
+  <div class="pt-4 border-t border-slate-200 flex space-x-2 text-sm">
+    <button type="button" @click="logout" class="px-3 py-2 bg-red-50 text-red-700 border border-red-200 rounded">
+      Desconectar
+    </button>
+  </div>
+</section>
+<script>
+function pairApp() {
+  const token = "{{.Data.Token}}";
+  const exp = "{{.Data.Exp}}";
+  const slug = "{{.Data.Slug}}";
+  const qs = "?t=" + token + "&exp=" + exp;
+  return {
+    tab: 'qr',
+    qr: '',
+    code: '',
+    phone: '',
+    status: 'desconhecido',
+    pollT: null,
+    init() {
+      this.refreshQR();
+      this.refreshStatus();
+      this.pollT = setInterval(() => {
+        this.refreshQR();
+        this.refreshStatus();
+      }, 3000);
+    },
+    async refreshQR() {
+      try {
+        const r = await fetch('/pair/' + slug + '/qr' + qs);
+        if (!r.ok) return;
+        const j = await r.json();
+        if (j.qrcode) this.qr = j.qrcode;
+      } catch (_) {}
+    },
+    async refreshStatus() {
+      try {
+        const r = await fetch('/pair/' + slug + '/status' + qs);
+        if (!r.ok) return;
+        const j = await r.json();
+        if (j.status) this.status = j.status;
+        if (j.status === 'connected' && this.pollT) {
+          clearInterval(this.pollT);
+        }
+      } catch (_) {}
+    },
+    async reqCode() {
+      const body = new URLSearchParams({phone: this.phone});
+      const r = await fetch('/pair/' + slug + '/code' + qs, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: body
+      });
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j.pairingCode) this.code = j.pairingCode;
+    },
+    async logout() {
+      const r = await fetch('/pair/' + slug + '/logout' + qs, {method: 'POST'});
+      if (r.ok) this.status = 'desconectado';
+    }
+  };
+}
+</script>
+{{end}}
