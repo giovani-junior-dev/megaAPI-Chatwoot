@@ -24,7 +24,7 @@ func (h *Handler) handleMessages(w http.ResponseWriter, r *http.Request) {
 	pn := parsePage(r.URL.Query().Get("page"))
 	v := messagesView{Tenant: tenant, Page: pn, PrevPage: pn - 1, NextPage: pn + 1, HasPrev: pn > 1}
 	if tenant == "" || h.deps.ListMessages == nil {
-		h.renderMessages(w, v)
+		h.renderMessages(w, r, v)
 		return
 	}
 	items, err := h.deps.ListMessages(r.Context(), tenant, messagesPageSize, (pn-1)*messagesPageSize)
@@ -34,11 +34,11 @@ func (h *Handler) handleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	v.Items = items
 	v.HasNext = len(items) == messagesPageSize
-	h.renderMessages(w, v)
+	h.renderMessages(w, r, v)
 }
 
-func (h *Handler) renderMessages(w http.ResponseWriter, v messagesView) {
-	h.render(w, "messages.html", page{Title: "Mensagens", Data: v})
+func (h *Handler) renderMessages(w http.ResponseWriter, r *http.Request, v messagesView) {
+	h.render(w, "messages.html", h.shellPage(r, "Mensagens", "/messages", v))
 }
 
 func parsePage(raw string) int {

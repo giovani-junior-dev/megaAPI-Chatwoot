@@ -7,7 +7,7 @@ import (
 )
 
 func (h *Handler) handleLoginForm(w http.ResponseWriter, _ *http.Request) {
-	h.render(w, "login.html", page{Title: "Login"})
+	h.render(w, "login.html", page{Title: "Login", HideShell: true})
 }
 
 func (h *Handler) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
@@ -20,7 +20,7 @@ func (h *Handler) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 	ok := h.validateLogin(r.Context(), email, pwd)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
-		h.render(w, "login.html", page{Title: "Login", Error: "Credenciais inválidas"})
+		h.render(w, "login.html", page{Title: "Login", Error: "Credenciais inválidas", HideShell: true})
 		return
 	}
 	tok, err := bridge.NewSession(email, h.deps.Key, sessionTTL)

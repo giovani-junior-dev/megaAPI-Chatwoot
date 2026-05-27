@@ -51,6 +51,9 @@ func New(d Deps) (*Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	if _, err := tpl.ParseFS(templatesFS, "templates/partials/*.html"); err != nil {
+		return nil, err
+	}
 	return &Handler{deps: d, tpl: tpl}, nil
 }
 
@@ -109,7 +112,11 @@ type indexRow struct {
 
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	rows := h.buildIndexRows(r)
-	h.render(w, "index.html", page{Title: "Painel", Data: rows})
+	h.render(w, "index.html", h.shellPage(r, "Painel", "/", rows))
+}
+
+func (h *Handler) shellPage(r *http.Request, title, active string, data any) page {
+	return page{Title: title, Data: data, ActivePath: active, Email: h.currentAdmin(r)}
 }
 
 func (h *Handler) buildIndexRows(r *http.Request) []indexRow {
@@ -136,9 +143,12 @@ func (h *Handler) buildIndexRows(r *http.Request) []indexRow {
 }
 
 type page struct {
-	Title string
-	Error string
-	Data  any
+	Title      string
+	Error      string
+	Data       any
+	ActivePath string
+	HideShell  bool
+	Email      string
 }
 
 func (h *Handler) render(w http.ResponseWriter, name string, p page) {

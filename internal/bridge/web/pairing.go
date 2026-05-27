@@ -108,7 +108,7 @@ func (h *Handler) handlePairLanding(w http.ResponseWriter, r *http.Request) {
 		Token: r.URL.Query().Get("t"),
 		Exp:   r.URL.Query().Get("exp"),
 	}
-	h.render(w, "pair.html", page{Title: "Pareamento WhatsApp", Data: data})
+	h.render(w, "pair.html", page{Title: "Pareamento WhatsApp", Data: data, HideShell: true})
 }
 
 type pairView struct {

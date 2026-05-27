@@ -19,7 +19,7 @@ func (h *Handler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	if h.deps.GetSetting != nil {
 		v.BaseURL, _ = h.deps.GetSetting(r.Context(), settingBaseURL)
 	}
-	h.render(w, "settings.html", page{Title: "Configurações", Data: v})
+	h.render(w, "settings.html", h.shellPage(r, "Configurações", "/settings", v))
 }
 
 func (h *Handler) handleSettingsBaseURL(w http.ResponseWriter, r *http.Request) {

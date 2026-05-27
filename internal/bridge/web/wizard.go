@@ -23,7 +23,7 @@ func (h *Handler) handleTenantNew(w http.ResponseWriter, r *http.Request) {
 	if h.deps.GetSetting != nil {
 		v.BaseURL, _ = h.deps.GetSetting(r.Context(), settingBaseURL)
 	}
-	h.render(w, "wizard.html", page{Title: "Novo tenant", Data: v})
+	h.render(w, "wizard.html", h.shellPage(r, "Novo tenant", "/tenants/new", v))
 }
 
 func (h *Handler) handleTenantCreate(w http.ResponseWriter, r *http.Request) {

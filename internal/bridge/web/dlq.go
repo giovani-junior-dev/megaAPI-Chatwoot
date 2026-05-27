@@ -17,7 +17,7 @@ func (h *Handler) handleDLQ(w http.ResponseWriter, r *http.Request) {
 			items = got
 		}
 	}
-	h.render(w, "dlq.html", page{Title: "DLQ", Data: items})
+	h.render(w, "dlq.html", h.shellPage(r, "DLQ", "/dlq", items))
 }
 
 const adminListMax = 100
