@@ -20,7 +20,7 @@
       <td>{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
       <td>{{template "badge" (dict "Variant" "neutral" "Text" .Direction)}}</td>
       <td><span class="font-mono">{{.ExternalID}}</span></td>
-      <td class="text-xs">{{.LastError}}</td>
+      <td class="error-text">{{.LastError}}</td>
       <td class="actions">
         <form method="post" action="/dlq/retry/{{.ID}}"
               x-data="{confirm:false,busy:false}"
@@ -35,8 +35,7 @@
               <button type="button" class="btn btn-ghost" x-on:click="confirm=false">Não</button>
             </span>
           </template>
-          <span class="sr-only" aria-busy="false">carregando</span>
-        </form>
+          </form>
       </td>
     </tr>
     {{end}}
@@ -49,7 +48,7 @@
       {{template "badge" (dict "Variant" "neutral" "Text" .Direction)}}
     </div>
     <div class="list-item__meta">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</div>
-    <div class="list-item__meta text-xs">{{.LastError}}</div>
+    <div class="list-item__meta error-text">{{.LastError}}</div>
     <div class="list-item__actions">
       <form method="post" action="/dlq/retry/{{.ID}}"
             x-data="{confirm:false,busy:false}"
@@ -64,7 +63,6 @@
             <button type="button" class="btn btn-ghost" x-on:click="confirm=false">Não</button>
           </span>
         </template>
-        <span class="sr-only" aria-busy="false">carregando</span>
       </form>
     </div>
   </article>
