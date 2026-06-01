@@ -47,7 +47,7 @@ func New(d Deps) (*Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	tpl, err := template.New("").Funcs(i18nFuncMap(strings)).ParseFS(templatesFS, "templates/*.html")
+	tpl, err := template.New("").Funcs(mergeFuncs(i18nFuncMap(strings))).ParseFS(templatesFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}

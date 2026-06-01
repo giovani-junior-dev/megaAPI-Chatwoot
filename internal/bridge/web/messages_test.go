@@ -164,11 +164,13 @@ func TestMessagesSnapshot(t *testing.T) {
 	pinTime := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	restore := SetNowFunc(func() time.Time { return pinTime })
 	defer restore()
+	fixedA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	fixedB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 	list := func(context.Context, string, int, int) ([]bridge.Message, error) {
 		return []bridge.Message{
-			{ID: uuid.New(), Direction: "in", Status: "failed", ExternalID: "ext-1",
+			{ID: fixedA, Direction: "in", Status: "failed", ExternalID: "ext-1",
 				CreatedAt: pinTime, Attempts: 2},
-			{ID: uuid.New(), Direction: "out", Status: "delivered", ExternalID: "ext-2",
+			{ID: fixedB, Direction: "out", Status: "delivered", ExternalID: "ext-2",
 				CreatedAt: pinTime, Attempts: 1},
 		}, nil
 	}

@@ -48,3 +48,29 @@ func i18nFuncMap(strings map[string]string) template.FuncMap {
 		"dict": dictMap,
 	}
 }
+
+// mergeFuncs adds the project-specific helpers (statusVariant) to a base func map.
+// statusVariant maps a message status string to a badge variant per the design tokens.
+func mergeFuncs(base template.FuncMap) template.FuncMap {
+	out := template.FuncMap{}
+	for k, v := range base {
+		out[k] = v
+	}
+	out["statusVariant"] = statusVariant
+	return out
+}
+
+// statusVariant maps a message status to the badge variant.
+// delivered/sent -> success, failed -> danger, pending/queued -> warning, else neutral.
+func statusVariant(status string) string {
+	switch status {
+	case "delivered", "sent":
+		return "success"
+	case "failed":
+		return "danger"
+	case "pending", "queued":
+		return "warning"
+	default:
+		return "neutral"
+	}
+}

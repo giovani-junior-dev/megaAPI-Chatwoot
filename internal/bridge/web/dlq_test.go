@@ -194,9 +194,10 @@ func TestDLQRetryHasConfirm(t *testing.T) {
 
 func TestDLQSnapshot(t *testing.T) {
 	pinTime := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	fixedID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	list := func(context.Context, int) ([]bridge.Message, error) {
 		return []bridge.Message{{
-			ID: uuid.New(), Direction: "out", ExternalID: "ext-dlq",
+			ID: fixedID, Direction: "out", ExternalID: "ext-dlq",
 			Status: "failed", LastError: "kaboom",
 			CreatedAt: pinTime,
 		}}, nil

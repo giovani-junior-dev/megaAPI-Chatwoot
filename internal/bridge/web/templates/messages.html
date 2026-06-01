@@ -1,42 +1,69 @@
 {{define "content"}}
 {{with .Data}}
 <section class="space-y-4">
-  <h1 class="text-2xl font-semibold">Mensagens</h1>
+  <header class="section-header">
+    <h1>Mensagens</h1>
+  </header>
   <form method="get" action="/messages" class="flex gap-2">
     <input name="tenant" value="{{.Tenant}}" placeholder="slug do tenant"
-           class="border rounded px-3 py-2 text-sm flex-1">
-    <button class="bg-slate-900 text-white px-4 py-2 rounded text-sm">Filtrar</button>
+           list="known-tenants"
+           class="input" style="flex:1">
+    <button class="btn btn-primary">Filtrar</button>
   </form>
+  <datalist id="known-tenants">
+    {{range .KnownSlugs}}<option value="{{.}}"></option>{{end}}
+  </datalist>
+  {{if .Tenant}}
   {{if .Items}}
-  <table class="w-full text-sm bg-white border rounded">
-    <thead class="bg-slate-100">
+  <table class="data-table">
+    <thead>
       <tr>
-        <th class="text-left px-3 py-2">Quando</th>
-        <th class="text-left px-3 py-2">Direção</th>
-        <th class="text-left px-3 py-2">Status</th>
-        <th class="text-left px-3 py-2">External ID</th>
-        <th class="text-right px-3 py-2">Tentativas</th>
+        <th>Quando</th>
+        <th>Direção</th>
+        <th>Status</th>
+        <th>External ID</th>
+        <th class="num">Tentativas</th>
       </tr>
     </thead>
     <tbody>
     {{range .Items}}
-      <tr class="border-t">
-        <td class="px-3 py-2">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
-        <td class="px-3 py-2">{{.Direction}}</td>
-        <td class="px-3 py-2">{{.Status}}</td>
-        <td class="px-3 py-2 font-mono text-xs">{{.ExternalID}}</td>
-        <td class="px-3 py-2 text-right">{{.Attempts}}</td>
-      </tr>
+    <tr>
+      <td>{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+      <td>{{template "badge" (dict "Variant" "neutral" "Text" .Direction)}}</td>
+      <td>{{template "badge" (dict "Variant" (statusVariant .Status) "Text" .Status)}}</td>
+      <td><span class="font-mono">{{.ExternalID}}</span></td>
+      <td class="num">{{.Attempts}}</td>
+    </tr>
     {{end}}
     </tbody>
   </table>
-  <nav class="flex gap-3 text-sm">
-    {{if .HasPrev}}<a href="/messages?tenant={{.Tenant}}&page={{.PrevPage}}" class="underline">« anterior</a>{{end}}
-    <span>página {{.Page}}</span>
-    {{if .HasNext}}<a href="/messages?tenant={{.Tenant}}&page={{.NextPage}}" class="underline">próximo »</a>{{end}}
+  {{range .Items}}
+  <article class="list-item">
+    <div class="list-item__head">
+      <span class="font-mono">{{.ExternalID}}</span>
+      {{template "badge" (dict "Variant" (statusVariant .Status) "Text" .Status)}}
+    </div>
+    <div class="list-item__meta">
+      {{.CreatedAt.Format "2006-01-02 15:04:05"}} · {{.Direction}} · {{.Attempts}} tentativas
+    </div>
+  </article>
+  {{end}}
+  <nav class="flex items-center gap-2">
+    {{if .HasPrev}}<a href="/messages?tenant={{.Tenant}}&page={{.PrevPage}}" class="btn btn-ghost">← anterior</a>{{end}}
+    <span class="text-sm">página {{.Page}}</span>
+    {{if .HasNext}}<a href="/messages?tenant={{.Tenant}}&page={{.NextPage}}" class="btn btn-ghost">próximo →</a>{{end}}
   </nav>
   {{else}}
-  <p class="text-slate-600">Informe um tenant para listar mensagens.</p>
+  {{template "empty" (dict
+     "Title" "Sem mensagens"
+     "Body" (printf "Nenhuma mensagem encontrada para o tenant %q." .Tenant)
+  )}}
+  {{end}}
+  {{else}}
+  {{template "empty" (dict
+     "Title" "Selecione um tenant"
+     "Body" "Informe um tenant para listar mensagens."
+  )}}
   {{end}}
 </section>
 {{end}}

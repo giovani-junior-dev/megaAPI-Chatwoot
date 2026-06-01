@@ -1,35 +1,79 @@
 {{define "content"}}
 <section class="space-y-4">
-  <h1 class="text-2xl font-semibold">DLQ — mensagens falhas</h1>
+  <header class="section-header">
+    <h1>DLQ — mensagens falhas</h1>
+  </header>
   {{if .Data}}
-  <table class="w-full text-sm bg-white border rounded">
-    <thead class="bg-slate-100">
+  <table class="data-table">
+    <thead>
       <tr>
-        <th class="text-left px-3 py-2">Quando</th>
-        <th class="text-left px-3 py-2">Direção</th>
-        <th class="text-left px-3 py-2">External ID</th>
-        <th class="text-left px-3 py-2">Último erro</th>
-        <th class="text-right px-3 py-2"></th>
+        <th>Quando</th>
+        <th>Direção</th>
+        <th>External ID</th>
+        <th>Último erro</th>
+        <th class="actions"></th>
       </tr>
     </thead>
     <tbody>
     {{range .Data}}
-      <tr class="border-t">
-        <td class="px-3 py-2">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
-        <td class="px-3 py-2">{{.Direction}}</td>
-        <td class="px-3 py-2 font-mono text-xs">{{.ExternalID}}</td>
-        <td class="px-3 py-2 text-xs text-red-700">{{.LastError}}</td>
-        <td class="px-3 py-2 text-right">
-          <form method="post" action="/dlq/retry/{{.ID}}">
-            <button class="bg-slate-900 text-white px-3 py-1 rounded text-xs">Retry</button>
-          </form>
-        </td>
-      </tr>
+    <tr>
+      <td>{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+      <td>{{template "badge" (dict "Variant" "neutral" "Text" .Direction)}}</td>
+      <td><span class="font-mono">{{.ExternalID}}</span></td>
+      <td class="text-xs">{{.LastError}}</td>
+      <td class="actions">
+        <form method="post" action="/dlq/retry/{{.ID}}"
+              x-data="{confirm:false,busy:false}"
+              x-on:submit="if(!confirm){event.preventDefault();confirm=true;return}busy=true">
+          <template x-if="!confirm">
+            <button type="button" class="btn btn-ghost" x-on:click="confirm=true">Retry</button>
+          </template>
+          <template x-if="confirm">
+            <span class="inline-flex items-center gap-2">
+              <span class="text-sm">Reprocessar?</span>
+              <button type="submit" class="btn btn-primary" x-bind:aria-busy="busy">Sim</button>
+              <button type="button" class="btn btn-ghost" x-on:click="confirm=false">Não</button>
+            </span>
+          </template>
+          <span class="sr-only" aria-busy="false">carregando</span>
+        </form>
+      </td>
+    </tr>
     {{end}}
     </tbody>
   </table>
+  {{range .Data}}
+  <article class="list-item">
+    <div class="list-item__head">
+      <span class="font-mono">{{.ExternalID}}</span>
+      {{template "badge" (dict "Variant" "neutral" "Text" .Direction)}}
+    </div>
+    <div class="list-item__meta">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</div>
+    <div class="list-item__meta text-xs">{{.LastError}}</div>
+    <div class="list-item__actions">
+      <form method="post" action="/dlq/retry/{{.ID}}"
+            x-data="{confirm:false,busy:false}"
+            x-on:submit="if(!confirm){event.preventDefault();confirm=true;return}busy=true">
+        <template x-if="!confirm">
+          <button type="button" class="btn btn-ghost" x-on:click="confirm=true">Retry</button>
+        </template>
+        <template x-if="confirm">
+          <span class="inline-flex items-center gap-2">
+            <span class="text-sm">Reprocessar?</span>
+            <button type="submit" class="btn btn-primary" x-bind:aria-busy="busy">Sim</button>
+            <button type="button" class="btn btn-ghost" x-on:click="confirm=false">Não</button>
+          </span>
+        </template>
+        <span class="sr-only" aria-busy="false">carregando</span>
+      </form>
+    </div>
+  </article>
+  {{end}}
   {{else}}
-  <p class="text-slate-600">DLQ vazia.</p>
+  {{template "empty" (dict
+     "Title" "DLQ vazia"
+     "Body" "Nenhuma mensagem em dead-letter queue no momento."
+  )}}
   {{end}}
 </section>
 {{end}}
