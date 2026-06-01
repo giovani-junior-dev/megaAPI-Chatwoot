@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Painel administrativo da ponte entre Chatwoot e megaAPI para mensagens de WhatsApp.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='oklch(63%25%200.18%20250)'/%3E%3C/svg%3E">
 <title>Login — Bridge Admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -40,6 +42,8 @@
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-full: 9999px;
+
+  --text-xl: 20px;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -440,17 +444,180 @@ body { font-size: 16px; line-height: 22px; }
   gap: var(--space-3);
   margin-bottom: var(--space-4);
 }
-.section-header h1 { font-size: 20px; font-weight: 600; color: var(--fg-strong); margin: 0; }
+.section-header h1 { font-size: var(--text-xl); font-weight: 600; color: var(--fg-strong); margin: 0; }
 
 @media (max-width: 639px) {
   .bridge-main { padding: var(--space-4); }
   .section-header { flex-direction: column; align-items: stretch; }
 }
+
+.field__label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-strong);
+  margin-bottom: var(--space-1);
+}
+.field__hint {
+  display: block;
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: var(--space-1);
+}
+
+.stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 200px;
+  flex-shrink: 0;
+}
+.step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+.step + .step::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 11px;
+  width: 2px;
+  height: calc(100% - 6px);
+  background: var(--border-subtle);
+}
+.step-bullet {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  color: var(--fg-muted);
+  flex-shrink: 0;
+  z-index: 1;
+}
+.step-label { line-height: 1.3; }
+.step[data-state="active"] { color: var(--fg-strong); font-weight: 500; }
+.step[data-state="active"] .step-bullet { background: var(--accent); border-color: var(--accent); color: var(--fg-on-accent); }
+.step[data-state="completed"] { color: var(--fg-default); }
+.step[data-state="completed"] .step-bullet { background: var(--success); border-color: var(--success); color: var(--fg-on-accent); }
+
+.wizard-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+@media (min-width: 768px) {
+  .wizard-shell { flex-direction: row; align-items: flex-start; }
+}
+
+.toast-floating {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+.toast-floating > .toast { pointer-events: auto; }
+.toast--enter { transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+
+a:focus-visible, button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--space-4);
+  top: -64px;
+  z-index: 60;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elev);
+  color: var(--fg-strong);
+  font-size: 14px;
+  text-decoration: none;
+  transition: top var(--dur-fast) var(--ease-out);
+}
+.skip-link:focus { top: var(--space-4); }
+
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-hover) 25%, var(--bg-input) 37%, var(--bg-hover) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s var(--ease-out) infinite;
+  border-radius: var(--radius-sm);
+}
+.skeleton-row {
+  height: 16px;
+  width: 100%;
+  margin-bottom: var(--space-3);
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.bridge-toasts {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  z-index: 50;
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px 14px;
+  max-width: 360px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elev);
+  color: var(--fg-strong);
+  font-size: 14px;
+  pointer-events: auto;
+  box-shadow: 0 4px 12px oklch(22% 0.01 264 / 0.16);
+}
+.toast-success { border-color: color-mix(in oklch, var(--success) 40%, transparent); }
+.toast-danger { border-color: color-mix(in oklch, var(--danger) 40%, transparent); color: var(--danger); }
+.toast__close {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.toast__close:hover { color: var(--fg-strong); }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+  .skip-link { transition: none; }
+}
 </style>
 </head>
 <body>
+<a class="skip-link" href="#conteudo">Pular para conteúdo</a>
 
-<main class="bridge-main">
+<main id="conteudo" class="bridge-main">
 
 <section class="auth">
   <div class="auth__card">

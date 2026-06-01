@@ -1,49 +1,127 @@
 {{define "content"}}
 {{with .Data}}
-<section class="max-w-2xl" x-data="{step:1}">
-  <h1 class="text-2xl font-semibold mb-4">Novo tenant — passo <span x-text="step"></span> de 4</h1>
-  <form method="post" action="/tenants" class="bg-white border border-slate-200 rounded p-6 space-y-4">
+<section class="wizard-shell"
+         x-data="{
+           step: 1,
+           slug: '',
+           megaapi_host: '',
+           megaapi_instance: '',
+           megaapi_token: '',
+           chatwoot_url: '',
+           chatwoot_token: '',
+           chatwoot_account_id: '',
+           chatwoot_inbox_id: '',
+           requiredFieldsForStep(s) {
+             if (s === 1) return ['slug'];
+             if (s === 2) return ['megaapi_host', 'megaapi_instance', 'megaapi_token'];
+             if (s === 3) return ['chatwoot_url', 'chatwoot_token', 'chatwoot_account_id', 'chatwoot_inbox_id'];
+             return [];
+           },
+           canAdvance() {
+             const fields = this.requiredFieldsForStep(this.step);
+             return fields.every(f => String(this[f] || '').trim() !== '');
+           },
+           stateFor(s) {
+             if (s < this.step) return 'completed';
+             if (s === this.step) return 'active';
+             return 'upcoming';
+           },
+           next() { if (this.canAdvance() && this.step < 4) this.step++; },
+           prev() { if (this.step > 1) this.step--; }
+         }">
+  <aside class="stepper" aria-label="Progresso do cadastro">
+    <div class="step" :data-state="stateFor(1)">
+      <span class="step-bullet">1</span>
+      <span class="step-label">Identificação</span>
+    </div>
+    <div class="step" :data-state="stateFor(2)">
+      <span class="step-bullet">2</span>
+      <span class="step-label">megaAPI</span>
+    </div>
+    <div class="step" :data-state="stateFor(3)">
+      <span class="step-bullet">3</span>
+      <span class="step-label">Chatwoot</span>
+    </div>
+    <div class="step" :data-state="stateFor(4)">
+      <span class="step-bullet">4</span>
+      <span class="step-label">Revisão</span>
+    </div>
+  </aside>
+  <form method="post" action="/tenants" class="space-y-4" style="flex:1">
+    <header class="section-header">
+      <h1>Novo tenant</h1>
+      <span class="text-sm" style="color:var(--fg-muted)">Passo <span x-text="step"></span> de 4</span>
+    </header>
+
     <div x-show="step===1" class="space-y-3">
-      <h2 class="font-medium">1) Identificação</h2>
-      <label class="block"><span class="text-sm">Slug</span>
-        <input name="slug" required class="mt-1 w-full border rounded px-3 py-2" placeholder="empresa-x"></label>
-      <button type="button" @click="step=2" class="bg-slate-900 text-white px-4 py-2 rounded">Próximo</button>
+      <label class="block">
+        <span class="field__label">Slug</span>
+        <input name="slug" required x-model="slug" class="input" placeholder="empresa-x">
+        <span class="field__hint">Identificador único usado na URL do webhook.</span>
+      </label>
+      <div class="flex gap-2">
+        <button type="button" @click="next()" :disabled="!canAdvance()" class="btn btn-primary">Próximo</button>
+      </div>
     </div>
+
     <div x-show="step===2" class="space-y-3">
-      <h2 class="font-medium">2) megaAPI</h2>
-      <label class="block"><span class="text-sm">Host</span>
-        <input name="megaapi_host" required class="mt-1 w-full border rounded px-3 py-2"></label>
-      <label class="block"><span class="text-sm">Instance</span>
-        <input name="megaapi_instance" required class="mt-1 w-full border rounded px-3 py-2"></label>
-      <label class="block"><span class="text-sm">Token</span>
-        <input name="megaapi_token" required class="mt-1 w-full border rounded px-3 py-2"></label>
+      <label class="block">
+        <span class="field__label">Host megaAPI</span>
+        <input name="megaapi_host" required x-model="megaapi_host" class="input" placeholder="https://mega.exemplo.com">
+      </label>
+      <label class="block">
+        <span class="field__label">Instância</span>
+        <input name="megaapi_instance" required x-model="megaapi_instance" class="input">
+      </label>
+      <label class="block">
+        <span class="field__label">Token</span>
+        <input name="megaapi_token" required x-model="megaapi_token" class="input">
+      </label>
       <div class="flex gap-2">
-        <button type="button" @click="step=1" class="px-4 py-2 border rounded">Voltar</button>
-        <button type="button" @click="step=3" class="bg-slate-900 text-white px-4 py-2 rounded">Próximo</button>
+        <button type="button" @click="prev()" class="btn btn-ghost">Voltar</button>
+        <button type="button" @click="next()" :disabled="!canAdvance()" class="btn btn-primary">Próximo</button>
       </div>
     </div>
+
     <div x-show="step===3" class="space-y-3">
-      <h2 class="font-medium">3) Chatwoot</h2>
-      <label class="block"><span class="text-sm">URL</span>
-        <input name="chatwoot_url" required class="mt-1 w-full border rounded px-3 py-2"></label>
-      <label class="block"><span class="text-sm">Token</span>
-        <input name="chatwoot_token" required class="mt-1 w-full border rounded px-3 py-2"></label>
-      <label class="block"><span class="text-sm">Account ID</span>
-        <input name="chatwoot_account_id" type="number" required class="mt-1 w-full border rounded px-3 py-2"></label>
-      <label class="block"><span class="text-sm">Inbox ID</span>
-        <input name="chatwoot_inbox_id" type="number" required class="mt-1 w-full border rounded px-3 py-2"></label>
+      <label class="block">
+        <span class="field__label">URL do Chatwoot</span>
+        <input name="chatwoot_url" required x-model="chatwoot_url" class="input" placeholder="https://chat.exemplo.com">
+      </label>
+      <label class="block">
+        <span class="field__label">Token de acesso</span>
+        <input name="chatwoot_token" required x-model="chatwoot_token" class="input">
+      </label>
+      <div class="flex gap-3">
+        <label class="block" style="flex:1">
+          <span class="field__label">Account ID</span>
+          <input name="chatwoot_account_id" type="number" required x-model="chatwoot_account_id" class="input">
+        </label>
+        <label class="block" style="flex:1">
+          <span class="field__label">Inbox ID</span>
+          <input name="chatwoot_inbox_id" type="number" required x-model="chatwoot_inbox_id" class="input">
+        </label>
+      </div>
       <div class="flex gap-2">
-        <button type="button" @click="step=2" class="px-4 py-2 border rounded">Voltar</button>
-        <button type="button" @click="step=4" class="bg-slate-900 text-white px-4 py-2 rounded">Próximo</button>
+        <button type="button" @click="prev()" class="btn btn-ghost">Voltar</button>
+        <button type="button" @click="next()" :disabled="!canAdvance()" class="btn btn-primary">Próximo</button>
       </div>
     </div>
+
     <div x-show="step===4" class="space-y-3">
-      <h2 class="font-medium">4) Revisão</h2>
-      <p class="text-sm text-slate-600">Base URL atual: <code>{{.BaseURL}}</code>.
-        Ao finalizar, o webhook da instância megaAPI será configurado automaticamente.</p>
+      <h2 class="field__label">Resumo</h2>
+      <dl class="space-y-1" style="font-size:14px">
+        <div><dt style="display:inline;color:var(--fg-muted)">Slug:</dt> <dd style="display:inline" x-text="slug"></dd></div>
+        <div><dt style="display:inline;color:var(--fg-muted)">megaAPI host:</dt> <dd style="display:inline" x-text="megaapi_host"></dd></div>
+        <div><dt style="display:inline;color:var(--fg-muted)">Instância:</dt> <dd style="display:inline" x-text="megaapi_instance"></dd></div>
+        <div><dt style="display:inline;color:var(--fg-muted)">Chatwoot URL:</dt> <dd style="display:inline" x-text="chatwoot_url"></dd></div>
+        <div><dt style="display:inline;color:var(--fg-muted)">Account ID:</dt> <dd style="display:inline" x-text="chatwoot_account_id"></dd></div>
+        <div><dt style="display:inline;color:var(--fg-muted)">Inbox ID:</dt> <dd style="display:inline" x-text="chatwoot_inbox_id"></dd></div>
+      </dl>
+      <p class="field__hint">Base URL atual: <code>{{.BaseURL}}</code>. Ao finalizar, o webhook da instância megaAPI será configurado automaticamente.</p>
       <div class="flex gap-2">
-        <button type="button" @click="step=3" class="px-4 py-2 border rounded">Voltar</button>
-        <button type="submit" class="bg-green-700 text-white px-4 py-2 rounded">Criar tenant</button>
+        <button type="button" @click="prev()" class="btn btn-ghost">Voltar</button>
+        <button type="submit" class="btn btn-primary">Criar tenant</button>
       </div>
     </div>
   </form>
