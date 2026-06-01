@@ -38,6 +38,37 @@ func TestLoginFormGET(t *testing.T) {
 	}
 }
 
+func TestLoginUsesDesignTokens(t *testing.T) {
+	h := newTestHandler(t, nil)
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	for _, banned := range []string{"bg-slate-", "text-slate-", "text-emerald-", "text-red-", "bg-green-", "shadow-", "shadow-sm", "rounded-lg"} {
+		if strings.Contains(body, banned) {
+			t.Fatalf("login must not use hardcoded tailwind class %q", banned)
+		}
+	}
+	if !strings.Contains(body, `class="input"`) {
+		t.Fatalf("login email input must use .input class")
+	}
+	if !strings.Contains(body, `class="btn-primary"`) {
+		t.Fatalf("login submit must use .btn-primary class")
+	}
+	if !strings.Contains(body, `autofocus`) {
+		t.Fatalf("login email must autofocus")
+	}
+	if !strings.Contains(body, `autocomplete="username"`) {
+		t.Fatalf("login email must autocomplete username")
+	}
+	if !strings.Contains(body, `autocomplete="current-password"`) {
+		t.Fatalf("login password must autocomplete current-password")
+	}
+}
+
 func TestLoginPOSTSuccess(t *testing.T) {
 	hash, _ := bridge.HashPassword("s3cret")
 	get := func(_ context.Context, email string) (bridge.Admin, error) {

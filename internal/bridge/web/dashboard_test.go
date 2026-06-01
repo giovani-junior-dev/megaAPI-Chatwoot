@@ -80,3 +80,71 @@ func TestDashboardEmptyShowsCTA(t *testing.T) {
 		t.Fatalf("missing empty CTA")
 	}
 }
+
+func TestPainelTableResponsive(t *testing.T) {
+	summaries := func(context.Context) ([]bridge.TenantSummary, error) {
+		return []bridge.TenantSummary{{Slug: "acme", Count24h: 3}}, nil
+	}
+	key := make([]byte, 32)
+	h, _ := New(Deps{Key: key, TenantSummaries: summaries})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	body := rr.Body.String()
+	if !strings.Contains(body, `class="data-table"`) {
+		t.Fatalf("painel must use .data-table class; body=%s", body)
+	}
+	if !strings.Contains(body, `class="list-item`) {
+		t.Fatalf("painel must have mobile list-item card class; body=%s", body)
+	}
+	for _, banned := range []string{"bg-slate-", "text-slate-", "text-emerald-", "text-red-", "bg-green-", "shadow-", "shadow-sm"} {
+		if strings.Contains(body, banned) {
+			t.Fatalf("painel must not use hardcoded tailwind class %q", banned)
+		}
+	}
+}
+
+func TestPainelPairedShowsBadge(t *testing.T) {
+	summaries := func(context.Context) ([]bridge.TenantSummary, error) {
+		return []bridge.TenantSummary{{Slug: "acme", Count24h: 0, LastJID: "5511999@s.whatsapp.net"}}, nil
+	}
+	getSetting := func(_ context.Context, k string) (string, error) {
+		if k == settingBaseURL {
+			return "https://bridge.example", nil
+		}
+		return "", nil
+	}
+	key := make([]byte, 32)
+	h, _ := New(Deps{Key: key, TenantSummaries: summaries, GetSetting: getSetting})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	body := rr.Body.String()
+	if !strings.Contains(body, `badge-success`) {
+		t.Fatalf("paired tenant must render .badge-success; body=%s", body)
+	}
+	if !strings.Contains(body, "5511999@s.whatsapp.net") {
+		t.Fatalf("paired tenant must show JID inside badge; body=%s", body)
+	}
+}
+
+func TestEmptyStateRendersCTA(t *testing.T) {
+	summaries := func(context.Context) ([]bridge.TenantSummary, error) {
+		return []bridge.TenantSummary{}, nil
+	}
+	key := make([]byte, 32)
+	h, _ := New(Deps{Key: key, TenantSummaries: summaries})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	body := rr.Body.String()
+	if !strings.Contains(body, "empty-state") {
+		t.Fatalf("empty state must use .empty-state class; body=%s", body)
+	}
+	if !strings.Contains(body, `href="/tenants/new"`) {
+		t.Fatalf("empty state must link to /tenants/new; body=%s", body)
+	}
+}
