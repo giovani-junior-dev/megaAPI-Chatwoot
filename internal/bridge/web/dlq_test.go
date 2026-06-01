@@ -2,8 +2,12 @@ package web
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -112,5 +116,117 @@ func TestDLQRequiresAuth(t *testing.T) {
 	h.Routes().ServeHTTP(rr, req)
 	if rr.Code != http.StatusFound {
 		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestDLQUsesDesignTokens(t *testing.T) {
+	list := func(context.Context, int) ([]bridge.Message, error) {
+		return []bridge.Message{{
+			ID: uuid.New(), Direction: "out", ExternalID: "ext-dlq",
+			Status: "failed", LastError: "kaboom",
+			CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+		}}, nil
+	}
+	h := newDLQHandler(t, list, nil)
+	req := httptest.NewRequest(http.MethodGet, "/dlq", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	for _, banned := range []string{"bg-slate-", "text-slate-", "text-emerald-", "text-red-", "bg-green-", "shadow-", "shadow-sm"} {
+		if strings.Contains(body, banned) {
+			t.Fatalf("dlq must not use hardcoded tailwind class %q", banned)
+		}
+	}
+	if !strings.Contains(body, `class="data-table"`) {
+		t.Fatalf("dlq must use .data-table class; body=%s", body)
+	}
+	if !strings.Contains(body, "list-item") {
+		t.Fatalf("dlq must have mobile list-item card; body=%s", body)
+	}
+	if !strings.Contains(body, "section-header") {
+		t.Fatalf("dlq must use .section-header for h1; body=%s", body)
+	}
+}
+
+func TestDLQRetryHasConfirm(t *testing.T) {
+	list := func(context.Context, int) ([]bridge.Message, error) {
+		return []bridge.Message{{
+			ID: uuid.New(), Direction: "out", ExternalID: "ext-dlq",
+			Status: "failed", LastError: "kaboom",
+			CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+		}}, nil
+	}
+	h := newDLQHandler(t, list, nil)
+	req := httptest.NewRequest(http.MethodGet, "/dlq", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	hasAlpine := strings.Contains(body, "x-data") && strings.Contains(body, "x-on:click") || strings.Contains(body, "@click")
+	if !hasAlpine {
+		t.Fatalf("dlq retry must use Alpine for inline confirm; body=%s", body)
+	}
+	idx := strings.Index(body, "alpine")
+	if idx == -1 {
+		idx = strings.Index(body, "x-data")
+	}
+	if idx == -1 {
+		idx = strings.Index(body, "@click")
+	}
+	if idx == -1 {
+		idx = strings.Index(body, "Retry")
+	}
+	retryIdx := strings.Index(body, "Retry")
+	if idx < 0 || retryIdx < 0 || idx > retryIdx {
+		t.Fatalf("dlq must place confirm attribute before Retry submit; confirmIdx=%d retryIdx=%d body=%s", idx, retryIdx, body)
+	}
+	if !strings.Contains(body, "aria-busy") {
+		t.Fatalf("dlq retry must signal loading via aria-busy; body=%s", body)
+	}
+}
+
+func TestDLQSnapshot(t *testing.T) {
+	pinTime := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	list := func(context.Context, int) ([]bridge.Message, error) {
+		return []bridge.Message{{
+			ID: uuid.New(), Direction: "out", ExternalID: "ext-dlq",
+			Status: "failed", LastError: "kaboom",
+			CreatedAt: pinTime,
+		}}, nil
+	}
+	h := newDLQHandler(t, list, nil)
+	req := httptest.NewRequest(http.MethodGet, "/dlq", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	goldenPath := filepath.Join("testdata", "dlq.golden.html")
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		if err := os.MkdirAll("testdata", 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(goldenPath, rr.Body.Bytes(), 0o644); err != nil {
+			t.Fatalf("write golden: %v", err)
+		}
+		return
+	}
+	want, err := os.ReadFile(goldenPath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("golden file missing at %s; run with UPDATE_GOLDEN=1 to create", goldenPath)
+		}
+		t.Fatalf("read golden: %v", err)
+	}
+	if string(want) != rr.Body.String() {
+		t.Fatalf("dlq snapshot drift.\nwant:\n%s\n\ngot:\n%s", want, rr.Body.String())
 	}
 }

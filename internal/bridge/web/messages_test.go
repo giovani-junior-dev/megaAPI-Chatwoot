@@ -2,8 +2,12 @@ package web
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -88,5 +92,112 @@ func TestParsePage(t *testing.T) {
 	}
 	if parsePage("7") != 7 {
 		t.Errorf("seven")
+	}
+}
+
+func TestMessagesUsesDesignTokens(t *testing.T) {
+	list := func(context.Context, string, int, int) ([]bridge.Message, error) {
+		return []bridge.Message{
+			{ID: uuid.New(), Direction: "in", Status: "delivered", ExternalID: "ext-1",
+				CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), Attempts: 1},
+		}, nil
+	}
+	h := newMsgHandler(t, list)
+	req := httptest.NewRequest(http.MethodGet, "/messages?tenant=acme", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	for _, banned := range []string{"bg-slate-", "text-slate-", "text-emerald-", "text-red-", "bg-green-", "shadow-", "shadow-sm"} {
+		if strings.Contains(body, banned) {
+			t.Fatalf("messages must not use hardcoded tailwind class %q", banned)
+		}
+	}
+	if !strings.Contains(body, `class="data-table"`) {
+		t.Fatalf("messages must use .data-table class; body=%s", body)
+	}
+	if !strings.Contains(body, "list-item") {
+		t.Fatalf("messages must have mobile list-item card; body=%s", body)
+	}
+	if !strings.Contains(body, "badge ") {
+		t.Fatalf("messages must render status via .badge partial; body=%s", body)
+	}
+	if !strings.Contains(body, `class="input"`) {
+		t.Fatalf("tenant filter must use .input class; body=%s", body)
+	}
+	if !strings.Contains(body, "btn-primary") {
+		t.Fatalf("filter submit must use .btn-primary; body=%s", body)
+	}
+	if !strings.Contains(body, "section-header") {
+		t.Fatalf("messages must use .section-header for h1; body=%s", body)
+	}
+}
+
+func TestMessagesStatusBadge(t *testing.T) {
+	list := func(context.Context, string, int, int) ([]bridge.Message, error) {
+		return []bridge.Message{
+			{ID: uuid.New(), Direction: "in", Status: "failed", ExternalID: "ext-x",
+				CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), Attempts: 3},
+		}, nil
+	}
+	h := newMsgHandler(t, list)
+	req := httptest.NewRequest(http.MethodGet, "/messages?tenant=acme", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "badge-danger") {
+		t.Fatalf("failed status must render badge-danger; body=%s", body)
+	}
+	if !strings.Contains(body, "badge-neutral") {
+		t.Fatalf("direction must render badge-neutral; body=%s", body)
+	}
+}
+
+func TestMessagesSnapshot(t *testing.T) {
+	pinTime := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	restore := SetNowFunc(func() time.Time { return pinTime })
+	defer restore()
+	list := func(context.Context, string, int, int) ([]bridge.Message, error) {
+		return []bridge.Message{
+			{ID: uuid.New(), Direction: "in", Status: "failed", ExternalID: "ext-1",
+				CreatedAt: pinTime, Attempts: 2},
+			{ID: uuid.New(), Direction: "out", Status: "delivered", ExternalID: "ext-2",
+				CreatedAt: pinTime, Attempts: 1},
+		}, nil
+	}
+	h := newMsgHandler(t, list)
+	req := httptest.NewRequest(http.MethodGet, "/messages?tenant=acme", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	goldenPath := filepath.Join("testdata", "messages.golden.html")
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		if err := os.MkdirAll("testdata", 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(goldenPath, rr.Body.Bytes(), 0o644); err != nil {
+			t.Fatalf("write golden: %v", err)
+		}
+		return
+	}
+	want, err := os.ReadFile(goldenPath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("golden file missing at %s; run with UPDATE_GOLDEN=1 to create", goldenPath)
+		}
+		t.Fatalf("read golden: %v", err)
+	}
+	if string(want) != rr.Body.String() {
+		t.Fatalf("messages snapshot drift.\nwant:\n%s\n\ngot:\n%s", want, rr.Body.String())
 	}
 }
