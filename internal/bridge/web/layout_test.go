@@ -78,6 +78,44 @@ func TestSidebarActiveItem(t *testing.T) {
 	}
 }
 
+func TestLayoutHasFavicon(t *testing.T) {
+	out := renderLayout(t, page{Title: "X"})
+	if !strings.Contains(out, `rel="icon"`) {
+		t.Fatalf("layout missing favicon link rel=\"icon\"; got: %s", out)
+	}
+	if !strings.Contains(out, `name="description"`) {
+		t.Fatalf("layout missing meta description")
+	}
+}
+
+func TestLayoutHasToastRegion(t *testing.T) {
+	out := renderLayout(t, page{Title: "Painel", ActivePath: "/"})
+	if !strings.Contains(out, `aria-live="polite"`) {
+		t.Fatalf("layout missing toast live region aria-live=\"polite\"; got: %s", out)
+	}
+}
+
+func TestLayoutHasSkeletonClass(t *testing.T) {
+	out := renderLayout(t, page{Title: "X"})
+	if !strings.Contains(out, ".skeleton") {
+		t.Fatalf("layout style missing .skeleton class")
+	}
+}
+
+func TestLayoutHasFocusVisible(t *testing.T) {
+	out := renderLayout(t, page{Title: "X"})
+	if !strings.Contains(out, ":focus-visible") {
+		t.Fatalf("layout style missing :focus-visible rule")
+	}
+}
+
+func TestLayoutHasSkipLink(t *testing.T) {
+	out := renderLayout(t, page{Title: "X"})
+	if !strings.Contains(out, `href="#conteudo"`) {
+		t.Fatalf("layout missing skip-link href=\"#conteudo\"; got: %s", out)
+	}
+}
+
 func TestLayoutSnapshot(t *testing.T) {
 	out := renderLayout(t, page{Title: "Painel", ActivePath: "/", Email: "admin@example.com"})
 	goldenPath := filepath.Join("testdata", "layout.golden.html")

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -334,5 +336,128 @@ func TestWizardRequiresAuth(t *testing.T) {
 	h.Routes().ServeHTTP(rr, req)
 	if rr.Code != http.StatusFound {
 		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestWizardHasStepper(t *testing.T) {
+	h := newWizardHandler(t, &tenantSink{}, nil)
+	req := httptest.NewRequest(http.MethodGet, "/tenants/new", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `class="stepper"`) {
+		t.Fatalf("wizard must render .stepper container; body=%s", body)
+	}
+	if !strings.Contains(body, `class="step "`) && !strings.Contains(body, `class="step"`) {
+		t.Fatalf("wizard must render .step items; body=%s", body)
+	}
+	if !strings.Contains(body, "step-bullet") {
+		t.Fatalf("wizard must render .step-bullet; body=%s", body)
+	}
+	if !strings.Contains(body, "data-state") {
+		t.Fatalf("wizard steps must carry data-state for Alpine to toggle; body=%s", body)
+	}
+}
+
+func TestWizardUsesDesignTokens(t *testing.T) {
+	h := newWizardHandler(t, &tenantSink{}, nil)
+	req := httptest.NewRequest(http.MethodGet, "/tenants/new", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	for _, banned := range []string{
+		"bg-slate-", "text-slate-", "border-slate-",
+		"text-emerald-", "text-red-", "bg-green-",
+		"shadow-", "shadow-sm",
+	} {
+		if strings.Contains(body, banned) {
+			t.Fatalf("wizard must not use hardcoded class %q; body=%s", banned, body)
+		}
+	}
+	if !strings.Contains(body, `class="input"`) {
+		t.Fatalf("wizard fields must use .input; body=%s", body)
+	}
+	if !strings.Contains(body, "btn-primary") {
+		t.Fatalf("wizard navigation must use .btn-primary; body=%s", body)
+	}
+	if !strings.Contains(body, "btn-ghost") {
+		t.Fatalf("wizard back button must use .btn-ghost; body=%s", body)
+	}
+	if !strings.Contains(body, "field__label") {
+		t.Fatalf("wizard fields must use .field__label; body=%s", body)
+	}
+	if !strings.Contains(body, "section-header") {
+		t.Fatalf("wizard must use .section-header; body=%s", body)
+	}
+}
+
+func TestWizardHasStepLabels(t *testing.T) {
+	h := newWizardHandler(t, &tenantSink{}, nil)
+	req := httptest.NewRequest(http.MethodGet, "/tenants/new", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	for _, label := range []string{"Identifica", "megaAPI", "Chatwoot", "Revis"}	{
+		if !strings.Contains(body, label) {
+			t.Fatalf("wizard stepper must label step %q; body=%s", label, body)
+		}
+	}
+}
+
+func TestWizardReviewSummary(t *testing.T) {
+	h := newWizardHandler(t, &tenantSink{}, nil)
+	req := httptest.NewRequest(http.MethodGet, "/tenants/new", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Resumo") && !strings.Contains(body, "Revis") {
+		t.Fatalf("wizard step 4 must show review summary heading; body=%s", body)
+	}
+	if !strings.Contains(body, `x-show="step===4"`) && !strings.Contains(body, `x-show="step == 4"`) {
+		t.Fatalf("wizard step 4 must toggle via x-show on step===4; body=%s", body)
+	}
+}
+
+func TestWizardSnapshot(t *testing.T) {
+	h := newWizardHandler(t, &tenantSink{}, nil)
+	req := httptest.NewRequest(http.MethodGet, "/tenants/new", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	goldenPath := filepath.Join("testdata", "wizard.golden.html")
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		if err := os.MkdirAll("testdata", 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(goldenPath, rr.Body.Bytes(), 0o644); err != nil {
+			t.Fatalf("write golden: %v", err)
+		}
+		return
+	}
+	want, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("golden file missing at %s; run with UPDATE_GOLDEN=1 to create", goldenPath)
+	}
+	if string(want) != rr.Body.String() {
+		t.Fatalf("wizard snapshot drift.\nwant:\n%s\n\ngot:\n%s", want, rr.Body.String())
 	}
 }

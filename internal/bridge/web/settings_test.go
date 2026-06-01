@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -194,5 +196,113 @@ func TestSettingsGETRequiresAuth(t *testing.T) {
 	h.Routes().ServeHTTP(rr, req)
 	if rr.Code != http.StatusFound {
 		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestSettingsUsesDesignTokens(t *testing.T) {
+	store := newStore()
+	store.data[settingBaseURL] = "https://bridge.example.com"
+	h := newSettingsHandler(t, store)
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	for _, banned := range []string{
+		"bg-slate-", "text-slate-", "border-slate-",
+		"text-emerald-", "text-red-", "bg-green-",
+		"shadow-", "shadow-sm",
+	} {
+		if strings.Contains(body, banned) {
+			t.Fatalf("settings must not use hardcoded class %q; body=%s", banned, body)
+		}
+	}
+	if !strings.Contains(body, `class="input"`) {
+		t.Fatalf("settings must use .input class; body=%s", body)
+	}
+	if !strings.Contains(body, "btn-primary") {
+		t.Fatalf("settings must use .btn-primary for submit; body=%s", body)
+	}
+	if !strings.Contains(body, "field__label") {
+		t.Fatalf("settings must use .field__label for form label; body=%s", body)
+	}
+	if !strings.Contains(body, "section-header") {
+		t.Fatalf("settings must use .section-header; body=%s", body)
+	}
+}
+
+func TestSettingsShowsToastWhenSaved(t *testing.T) {
+	store := newStore()
+	store.data[settingBaseURL] = "https://bridge.example.com"
+	h := newSettingsHandler(t, store)
+	req := httptest.NewRequest(http.MethodGet, "/settings?saved=1", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `class="toast`) {
+		t.Fatalf("settings must render .toast when saved=1; body=%s", body)
+	}
+	if !strings.Contains(body, "toast-success") {
+		t.Fatalf("settings must render .toast-success variant; body=%s", body)
+	}
+	if !strings.Contains(body, "x-data") {
+		t.Fatalf("settings toast must be controlled by Alpine x-data for auto-dismiss; body=%s", body)
+	}
+	if strings.Contains(body, "text-green-700") {
+		t.Fatalf("settings must not use raw text-green-700 inline; body=%s", body)
+	}
+}
+
+func TestSettingsNoToastWhenNotSaved(t *testing.T) {
+	store := newStore()
+	store.data[settingBaseURL] = "https://bridge.example.com"
+	h := newSettingsHandler(t, store)
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	if strings.Contains(body, `class="toast toast-success"`) {
+		t.Fatalf("settings must not render toast when saved query is absent; body=%s", body)
+	}
+}
+
+func TestSettingsSnapshot(t *testing.T) {
+	store := newStore()
+	store.data[settingBaseURL] = "https://bridge.example.com"
+	h := newSettingsHandler(t, store)
+	req := httptest.NewRequest(http.MethodGet, "/settings?saved=1", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	goldenPath := filepath.Join("testdata", "settings.golden.html")
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		if err := os.MkdirAll("testdata", 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(goldenPath, rr.Body.Bytes(), 0o644); err != nil {
+			t.Fatalf("write golden: %v", err)
+		}
+		return
+	}
+	want, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("golden file missing at %s; run with UPDATE_GOLDEN=1 to create", goldenPath)
+	}
+	if string(want) != rr.Body.String() {
+		t.Fatalf("settings snapshot drift.\nwant:\n%s\n\ngot:\n%s", want, rr.Body.String())
 	}
 }
