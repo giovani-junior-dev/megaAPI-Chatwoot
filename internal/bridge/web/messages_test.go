@@ -152,11 +152,15 @@ func TestMessagesStatusBadge(t *testing.T) {
 		t.Fatalf("status=%d", rr.Code)
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, "badge-danger") {
-		t.Fatalf("failed status must render badge-danger; body=%s", body)
+	// Must render a span.badge.badge-danger INSIDE the data-table row for the failed message.
+	// Searching the CSS block alone (which contains "badge-danger") would be a vacuous pass.
+	wantStatusBadge := `<span class="badge badge-danger">failed</span>`
+	if !strings.Contains(body, wantStatusBadge) {
+		t.Fatalf("failed status must render %q; body=%s", wantStatusBadge, body)
 	}
-	if !strings.Contains(body, "badge-neutral") {
-		t.Fatalf("direction must render badge-neutral; body=%s", body)
+	wantDirBadge := `<span class="badge badge-neutral">in</span>`
+	if !strings.Contains(body, wantDirBadge) {
+		t.Fatalf("direction must render %q; body=%s", wantDirBadge, body)
 	}
 }
 
