@@ -39,3 +39,17 @@ func TestTFuncResolvesAndFallsBack(t *testing.T) {
 		t.Errorf("fallback should echo key")
 	}
 }
+
+func TestDictMapPairsKeys(t *testing.T) {
+	got := dictMap("a", 1, "b", "two")
+	if got["a"] != 1 || got["b"] != "two" || len(got) != 2 {
+		t.Fatalf("dictMap: %v", got)
+	}
+}
+
+func TestDictMapOddArgsReturnsEmpty(t *testing.T) {
+	got := dictMap("a", 1, "orphan")
+	if len(got) != 0 {
+		t.Fatalf("dictMap odd args: %v", got)
+	}
+}

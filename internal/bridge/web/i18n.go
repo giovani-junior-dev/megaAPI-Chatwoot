@@ -46,6 +46,5 @@ func i18nFuncMap(strings map[string]string) template.FuncMap {
 	return template.FuncMap{
 		"t":    newTFunc(strings),
 		"dict": dictMap,
-		"map":  dictMap,
 	}
 }
