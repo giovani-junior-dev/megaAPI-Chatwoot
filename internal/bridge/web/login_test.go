@@ -3,9 +3,12 @@ package web
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -55,8 +58,8 @@ func TestLoginUsesDesignTokens(t *testing.T) {
 	if !strings.Contains(body, `class="input"`) {
 		t.Fatalf("login email input must use .input class")
 	}
-	if !strings.Contains(body, `class="btn-primary"`) {
-		t.Fatalf("login submit must use .btn-primary class")
+	if !strings.Contains(body, "btn-primary") {
+		t.Fatalf("login submit must use .btn-primary class; body=%s", body)
 	}
 	if !strings.Contains(body, `autofocus`) {
 		t.Fatalf("login email must autofocus")
@@ -161,6 +164,36 @@ func TestLogoutClearsCookie(t *testing.T) {
 	c := findCookie(rr.Result().Cookies(), cookieName)
 	if c == nil || c.MaxAge >= 0 {
 		t.Fatalf("expected expired cookie, got %+v", c)
+	}
+}
+
+func TestLoginSnapshot(t *testing.T) {
+	h := newTestHandler(t, nil)
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	goldenPath := filepath.Join("testdata", "login.golden.html")
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		if err := os.MkdirAll("testdata", 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(goldenPath, rr.Body.Bytes(), 0o644); err != nil {
+			t.Fatalf("write golden: %v", err)
+		}
+		return
+	}
+	want, err := os.ReadFile(goldenPath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("golden file missing at %s; run with UPDATE_GOLDEN=1 to create", goldenPath)
+		}
+		t.Fatalf("read golden: %v", err)
+	}
+	if string(want) != rr.Body.String() {
+		t.Fatalf("login snapshot drift.\nwant:\n%s\n\ngot:\n%s", want, rr.Body.String())
 	}
 }
 

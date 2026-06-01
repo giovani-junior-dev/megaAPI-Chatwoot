@@ -1,0 +1,4 @@
+{{define "badge"}}
+{{- /* usage: {{template "badge" (dict "Variant" "success" "Text" "Pareado")}} */ -}}
+<span class="badge badge-{{or .Variant "neutral"}}">{{.Text}}</span>
+{{end}}

@@ -53,10 +53,23 @@ func BuildPairLink(p PairLinkParams, key []byte) string {
 	if ttl <= 0 {
 		ttl = int64(defaultPairTTL.Seconds())
 	}
-	exp := time.Now().Add(time.Duration(ttl) * time.Second).Unix()
+	now := timeNow()
+	exp := now.Add(time.Duration(ttl) * time.Second).Unix()
 	tok := SignPairToken(PairClaim{Slug: p.Slug, Exp: exp}, key)
 	return strings.TrimRight(p.BaseURL, "/") + "/pair/" + p.Slug +
 		"?t=" + tok + "&exp=" + strconv.FormatInt(exp, 10)
+}
+
+// timeNow is a swappable clock so tests can pin pair-link expiry for stable
+// golden snapshots without mocking the whole time package.
+var timeNow = time.Now
+
+// SetNowFunc replaces the clock used by BuildPairLink. Returns a restore
+// func the caller defers.
+func SetNowFunc(fn func() time.Time) func() {
+	prev := timeNow
+	timeNow = fn
+	return func() { timeNow = prev }
 }
 
 func claimFromRequest(r *http.Request) PairClaim {

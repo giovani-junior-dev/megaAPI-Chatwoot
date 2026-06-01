@@ -495,7 +495,7 @@ body { font-size: 16px; line-height: 22px; }
   <div class="bridge-sidebar__user">
     <div class="bridge-user">
       <span class="bridge-user__avatar" aria-hidden="true"></span>
-      <span class="bridge-user__email">admin@example.com</span>
+      <span class="bridge-user__email">a@b</span>
     </div>
     <form method="post" action="/logout">
       <button type="submit" class="bridge-user__logout" aria-label="Sair">
@@ -508,7 +508,80 @@ body { font-size: 16px; line-height: 22px; }
 
   <div class="bridge-backdrop" :class="open ? 'is-open' : ''" @click="open=false"></div>
   <main class="bridge-main">
-<div data-test="content"></div>
+
+<section class="painel">
+  <header class="section-header">
+    <h1>Painel</h1>
+    <a href="/tenants/new" class="btn btn-primary">+ Novo tenant</a>
+  </header>
+  
+    <table class="data-table">
+  <thead>
+    <tr>
+      <th>Slug</th><th>Mensagens (24h)</th><th>Status</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    
+    <tr>
+      <td><span class="font-mono">acme</span></td>
+      <td class="num">12</td>
+      <td>
+        <span class="badge badge-success">5511999@s.whatsapp.net</span>
+
+      </td>
+      <td class="actions">
+        <a href="https://bridge.example/pair/acme?t=35ac695cff7cba53e8c8c1b2a762706bd64c8d32a0390e2666a9cf367d44092c&amp;exp=1780401600" target="_blank" rel="noopener" class="btn btn-ghost">Gerar link de pareamento</a> 
+        <a href="/tenants/acme/diag" class="btn btn-ghost">diagnóstico</a>
+      </td>
+    </tr>
+    
+    <tr>
+      <td><span class="font-mono">globex</span></td>
+      <td class="num">0</td>
+      <td>
+        <span class="badge badge-neutral">não pareado</span>
+
+      </td>
+      <td class="actions">
+        <a href="https://bridge.example/pair/globex?t=c3678fc3c01ed3357eb56dca3a10a00261326248c796515e435e072b69a485b8&amp;exp=1780401600" target="_blank" rel="noopener" class="btn btn-ghost">Gerar link de pareamento</a> 
+        <a href="/tenants/globex/diag" class="btn btn-ghost">diagnóstico</a>
+      </td>
+    </tr>
+    
+  </tbody>
+</table>
+
+<article class="list-item">
+  <div class="list-item__head">
+    <span class="font-mono">acme</span>
+    <span class="badge badge-success">5511999@s.whatsapp.net</span>
+
+  </div>
+  <div class="list-item__meta">12 mensagens (24h)</div>
+  <div class="list-item__actions">
+    <a href="https://bridge.example/pair/acme?t=35ac695cff7cba53e8c8c1b2a762706bd64c8d32a0390e2666a9cf367d44092c&amp;exp=1780401600" target="_blank" rel="noopener" class="btn btn-ghost">Gerar link de pareamento</a> 
+    <a href="/tenants/acme/diag" class="btn btn-ghost">diagnóstico</a>
+  </div>
+</article>
+
+<article class="list-item">
+  <div class="list-item__head">
+    <span class="font-mono">globex</span>
+    <span class="badge badge-neutral">não pareado</span>
+
+  </div>
+  <div class="list-item__meta">0 mensagens (24h)</div>
+  <div class="list-item__actions">
+    <a href="https://bridge.example/pair/globex?t=c3678fc3c01ed3357eb56dca3a10a00261326248c796515e435e072b69a485b8&amp;exp=1780401600" target="_blank" rel="noopener" class="btn btn-ghost">Gerar link de pareamento</a> 
+    <a href="/tenants/globex/diag" class="btn btn-ghost">diagnóstico</a>
+  </div>
+</article>
+
+
+  
+</section>
+
   </main>
 </div>
 

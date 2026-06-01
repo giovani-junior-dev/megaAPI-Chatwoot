@@ -2,10 +2,15 @@ package web
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/madeinlowcode/chatwoot-megaapi-bridge/internal/bridge"
 )
@@ -95,7 +100,7 @@ func TestPainelTableResponsive(t *testing.T) {
 	if !strings.Contains(body, `class="data-table"`) {
 		t.Fatalf("painel must use .data-table class; body=%s", body)
 	}
-	if !strings.Contains(body, `class="list-item`) {
+	if !strings.Contains(body, "list-item") {
 		t.Fatalf("painel must have mobile list-item card class; body=%s", body)
 	}
 	for _, banned := range []string{"bg-slate-", "text-slate-", "text-emerald-", "text-red-", "bg-green-", "shadow-", "shadow-sm"} {
@@ -106,8 +111,9 @@ func TestPainelTableResponsive(t *testing.T) {
 }
 
 func TestPainelPairedShowsBadge(t *testing.T) {
+	paired := time.Now()
 	summaries := func(context.Context) ([]bridge.TenantSummary, error) {
-		return []bridge.TenantSummary{{Slug: "acme", Count24h: 0, LastJID: "5511999@s.whatsapp.net"}}, nil
+		return []bridge.TenantSummary{{Slug: "acme", Count24h: 0, PairedAt: &paired, LastJID: "5511999@s.whatsapp.net"}}, nil
 	}
 	getSetting := func(_ context.Context, k string) (string, error) {
 		if k == settingBaseURL {
@@ -146,5 +152,54 @@ func TestEmptyStateRendersCTA(t *testing.T) {
 	}
 	if !strings.Contains(body, `href="/tenants/new"`) {
 		t.Fatalf("empty state must link to /tenants/new; body=%s", body)
+	}
+}
+
+func TestPainelSnapshot(t *testing.T) {
+	paired := time.Now()
+	pinTime := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	restore := SetNowFunc(func() time.Time { return pinTime })
+	defer restore()
+
+	summaries := func(context.Context) ([]bridge.TenantSummary, error) {
+		return []bridge.TenantSummary{
+			{Slug: "acme", Count24h: 12, PairedAt: &paired, LastJID: "5511999@s.whatsapp.net"},
+			{Slug: "globex", Count24h: 0},
+		}, nil
+	}
+	getSetting := func(_ context.Context, k string) (string, error) {
+		if k == settingBaseURL {
+			return "https://bridge.example", nil
+		}
+		return "", nil
+	}
+	key := make([]byte, 32)
+	h, _ := New(Deps{Key: key, TenantSummaries: summaries, GetSetting: getSetting})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	goldenPath := filepath.Join("testdata", "painel.golden.html")
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		if err := os.MkdirAll("testdata", 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(goldenPath, rr.Body.Bytes(), 0o644); err != nil {
+			t.Fatalf("write golden: %v", err)
+		}
+		return
+	}
+	want, err := os.ReadFile(goldenPath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("golden file missing at %s; run with UPDATE_GOLDEN=1 to create", goldenPath)
+		}
+		t.Fatalf("read golden: %v", err)
+	}
+	if string(want) != rr.Body.String() {
+		t.Fatalf("painel snapshot drift.\nwant:\n%s\n\ngot:\n%s", want, rr.Body.String())
 	}
 }

@@ -1,0 +1,38 @@
+{{define "datatable"}}
+{{- /* usage: {{template "datatable" .Data}} where .Data is a tableView with Columns []string, Rows []indexRow */ -}}
+<table class="data-table">
+  <thead>
+    <tr>
+      {{range .Columns}}<th>{{.}}</th>{{end}}
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Rows}}
+    <tr>
+      <td><span class="font-mono">{{.Slug}}</span></td>
+      <td class="num">{{.Count24h}}</td>
+      <td>
+        {{if .Paired}}{{template "badge" (map "Variant" "success" "Text" .LastJID)}}{{else}}{{template "badge" (map "Variant" "neutral" "Text" "não pareado")}}{{end}}
+      </td>
+      <td class="actions">
+        {{with .PairLink}}<a href="{{.}}" target="_blank" rel="noopener" class="btn btn-ghost">Gerar link de pareamento</a> {{end}}
+        <a href="/tenants/{{.Slug}}/diag" class="btn btn-ghost">diagnóstico</a>
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{range .Rows}}
+<article class="list-item">
+  <div class="list-item__head">
+    <span class="font-mono">{{.Slug}}</span>
+    {{if .Paired}}{{template "badge" (map "Variant" "success" "Text" .LastJID)}}{{else}}{{template "badge" (map "Variant" "neutral" "Text" "não pareado")}}{{end}}
+  </div>
+  <div class="list-item__meta">{{.Count24h}} mensagens (24h)</div>
+  <div class="list-item__actions">
+    {{with .PairLink}}<a href="{{.}}" target="_blank" rel="noopener" class="btn btn-ghost">Gerar link de pareamento</a> {{end}}
+    <a href="/tenants/{{.Slug}}/diag" class="btn btn-ghost">diagnóstico</a>
+  </div>
+</article>
+{{end}}
+{{end}}

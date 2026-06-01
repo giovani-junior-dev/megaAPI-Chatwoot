@@ -293,6 +293,157 @@ html, body {
     animation-duration: 0ms !important;
   }
 }
+
+body { font-size: 16px; line-height: 22px; }
+
+.input {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-1);
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: 15px;
+}
+.input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--fg-on-accent);
+  border-color: var(--accent);
+}
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-ghost {
+  background: transparent;
+  color: var(--fg-strong);
+  border-color: var(--border-strong);
+}
+.btn-ghost:hover { background: var(--bg-hover); }
+.btn-danger {
+  background: var(--danger);
+  color: var(--fg-on-accent);
+  border-color: var(--danger);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+.badge-success { background: color-mix(in oklch, var(--success) 12%, var(--bg-elev)); color: var(--success); border-color: color-mix(in oklch, var(--success) 28%, transparent); }
+.badge-warning { background: color-mix(in oklch, var(--warning) 18%, var(--bg-elev)); color: color-mix(in oklch, var(--warning) 70%, var(--fg-strong)); border-color: color-mix(in oklch, var(--warning) 30%, transparent); }
+.badge-danger { background: color-mix(in oklch, var(--danger) 12%, var(--bg-elev)); color: var(--danger); border-color: color-mix(in oklch, var(--danger) 28%, transparent); }
+.badge-neutral { background: var(--bg-hover); color: var(--fg-default); border-color: var(--border-subtle); }
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  font-size: 14px;
+}
+.data-table th, .data-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--fg-strong);
+}
+.data-table th {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-muted);
+  background: var(--bg-sidebar);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover { background: var(--bg-hover); }
+
+.list-item {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--bg-elev);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-3);
+}
+@media (max-width: 767px) {
+  .data-table { display: none; }
+  .list-item { display: flex; }
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-10) var(--space-4);
+  text-align: center;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  color: var(--fg-default);
+}
+.empty-state__icon { color: var(--fg-muted); }
+.empty-state__title { font-size: 18px; font-weight: 600; color: var(--fg-strong); }
+.empty-state__body { color: var(--fg-default); max-width: 40ch; }
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  background: color-mix(in oklch, var(--danger) 10%, var(--bg-elev));
+  color: var(--danger);
+  border: 1px solid color-mix(in oklch, var(--danger) 25%, transparent);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.section-header h1 { font-size: 20px; font-weight: 600; color: var(--fg-strong); margin: 0; }
+
+@media (max-width: 639px) {
+  .bridge-main { padding: var(--space-4); }
+  .section-header { flex-direction: column; align-items: stretch; }
+}
 </style>
 </head>
 <body>

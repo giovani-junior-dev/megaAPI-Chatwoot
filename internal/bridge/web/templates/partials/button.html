@@ -1,0 +1,7 @@
+{{define "button"}}
+{{- /* usage: {{template "button" (dict "Variant" "primary" "Label" "Entrar" "Type" "submit")}} */ -}}
+<button type="{{or .Type "button"}}"
+        class="btn btn-{{or .Variant "primary"}}"{{with .Attr}} {{.}}{{end}}>
+  {{.Label}}
+</button>
+{{end}}

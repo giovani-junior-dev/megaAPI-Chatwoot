@@ -28,6 +28,24 @@ func newTFunc(strings map[string]string) func(string) string {
 	}
 }
 
+// dictMap builds a map[string]any from alternating key/value args for use
+// in template sub-renderings like {{template "badge" (dict "Variant" "success" ...)}}.
+func dictMap(values ...any) map[string]any {
+	if len(values)%2 != 0 {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(values)/2)
+	for i := 0; i < len(values); i += 2 {
+		key, _ := values[i].(string)
+		out[key] = values[i+1]
+	}
+	return out
+}
+
 func i18nFuncMap(strings map[string]string) template.FuncMap {
-	return template.FuncMap{"t": newTFunc(strings)}
+	return template.FuncMap{
+		"t":    newTFunc(strings),
+		"dict": dictMap,
+		"map":  dictMap,
+	}
 }

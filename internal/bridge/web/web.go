@@ -110,9 +110,18 @@ type indexRow struct {
 	LastJID  string
 }
 
+type tableView struct {
+	Columns []string
+	Rows    []indexRow
+}
+
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	rows := h.buildIndexRows(r)
-	h.render(w, "index.html", h.shellPage(r, "Painel", "/", rows))
+	view := tableView{
+		Columns: []string{"Slug", "Mensagens (24h)", "Status", ""},
+		Rows:    rows,
+	}
+	h.render(w, "index.html", h.shellPage(r, "Painel", "/", view))
 }
 
 func (h *Handler) shellPage(r *http.Request, title, active string, data any) page {
