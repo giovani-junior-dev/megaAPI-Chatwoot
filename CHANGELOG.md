@@ -8,32 +8,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Self-service WhatsApp pairing flow. Admins generate a per-tenant HMAC-signed
-  link (`/pair/{slug}?t=<hmac>&exp=<unix>`, 24h TTL) and share it with the end
-  customer. The pairing page exposes both QR code and pairing-code flows,
-  polls every 3s, and surfaces the live connection state. megaAPI tokens
+- (none)
+
+### Changed
+- (none)
+
+### Fixed
+- (none)
+
+## [1.1.0] - 2026-06-01
+
+Admin UI overhaul (design system + responsive shell) plus the self-service
+pairing flow. No breaking changes; drop-in over 1.0.1. Schema migration
+`0004_pairing.sql` is required (adds `tenants.paired_at`, `tenants.last_jid`).
+
+### Added
+- **Admin shell redesign (phases 1-5).** Full visual overhaul of the admin UI
+  against `DESIGN.md` (OKLCH tokens, Inter, restrained palette, accent hue 250):
+  - **Shell.** Vertical sidebar (240px) with active-item `aria-current`, brand,
+    user card + logout. Off-canvas drawer under 1024px via Alpine, hamburger
+    trigger. CSS design tokens declared inline; `prefers-reduced-motion`
+    honoured. New `HideShell` / `ActivePath` / `Email` page fields.
+  - **Login + Painel.** Reusable template partials (`button`, `badge`, `empty`,
+    `datatable`). Login carries product identity; dashboard tenant table
+    collapses to cards under 768px with status badges and an empty state.
+  - **Mensagens + DLQ.** Responsive tables, status/direction badges, ghost-button
+    pagination, tenant `datalist`, inline Alpine confirm on DLQ retry, DLQ
+    errors rendered in `--danger`.
+  - **Settings + Wizard.** Settings save feedback as an auto-dismissing toast.
+    Wizard gains a real vertical stepper (`data-state` active/completed/upcoming)
+    with per-step validation and a review summary.
+  - **Polish.** SVG-data-URI favicon, meta description, global `aria-live` toast
+    region, skeleton classes, `g`+`d/m/q/s` keyboard navigation, skip-link, and
+    `:focus-visible` outlines across interactive elements.
+- **Self-service WhatsApp pairing flow.** Admins generate a per-tenant
+  HMAC-signed link (`/pair/{slug}?t=<hmac>&exp=<unix>`, 24h TTL) and share it
+  with the end customer. The pairing page exposes both QR code and pairing-code
+  flows, polls every 3s, and surfaces the live connection state. megaAPI tokens
   never leave the server.
 - Migration `0004_pairing.sql` adds `tenants.paired_at` and `tenants.last_jid`.
 - Webhook handler now reacts to `messageType=connection_update` with
   `message=phone_connected` and persists pairing state.
 
 ### Changed
-- Admin dashboard now lists each tenant's pairing link with copy-to-clipboard
-  and last-paired timestamp.
-
-### Deprecated
-- (none)
-
-### Removed
-- (none)
-
-### Fixed
-- (none)
+- Admin dashboard lists each tenant's pairing link with copy-to-clipboard and
+  last-paired timestamp.
+- Admin pages no longer use the central `max-w-6xl` container; content uses the
+  full shell width with a fixed sidebar.
 
 ### Security
 - Pairing endpoints require HMAC-SHA256 over `slug|exp` keyed with
   `BRIDGE_ENCRYPTION_KEY`. Missing / invalid / expired token returns 401.
   Slug alone is insufficient to access pairing controls.
+
+### Notes
+- Tailwind is still loaded via CDN (no build step added). UI partials live in
+  `internal/bridge/web/templates/partials/`; golden snapshots cover the
+  rendered layout and pages.
 
 ## [1.0.1] - 2026-05-25
 
@@ -143,6 +174,7 @@ Tag pushed and GitHub release published 2026-05-25:
 - See `docs/release/RELEASE_NOTES.md` for the full upgrade story from 0.x and
   for the supported configuration matrix.
 
-[Unreleased]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/releases/tag/v1.0.0
