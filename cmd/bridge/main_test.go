@@ -5,8 +5,11 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/madeinlowcode/chatwoot-megaapi-bridge/internal/bridge"
@@ -134,4 +137,75 @@ func TestReachCheck_5xxFails(t *testing.T) {
 func TestReachCheck_BadURL(t *testing.T) {
 	err := reachCheck(context.Background(), "://not-a-url")
 	require.Error(t, err)
+}
+
+func TestBootstrapDatabaseIdempotent(t *testing.T) {
+	t.Run("creates role and database when absent", func(t *testing.T) {
+		var execed []string
+		exists := func(_ context.Context, _ string, _ ...any) (bool, error) { return false, nil }
+		exec := func(_ context.Context, sql string) error { execed = append(execed, sql); return nil }
+		err := bootstrapDatabase(context.Background(), exists, exec, "bridge", "bridge", "s3cr3t")
+		require.NoError(t, err)
+		require.Len(t, execed, 2)
+		require.Contains(t, execed[0], "CREATE ROLE")
+		require.Contains(t, execed[0], `"bridge"`)
+		require.Contains(t, execed[1], "CREATE DATABASE")
+		require.Contains(t, execed[1], "OWNER")
+	})
+
+	t.Run("skips creation when role and database already present", func(t *testing.T) {
+		var execed []string
+		exists := func(_ context.Context, _ string, _ ...any) (bool, error) { return true, nil }
+		exec := func(_ context.Context, sql string) error { execed = append(execed, sql); return nil }
+		err := bootstrapDatabase(context.Background(), exists, exec, "bridge", "bridge", "s3cr3t")
+		require.NoError(t, err)
+		require.Empty(t, execed)
+	})
+
+	t.Run("ignores already-exists race errors", func(t *testing.T) {
+		exists := func(_ context.Context, _ string, _ ...any) (bool, error) { return false, nil }
+		exec := func(_ context.Context, sql string) error {
+			if strings.Contains(sql, "DATABASE") {
+				return &pgconn.PgError{Code: "42P04"} // duplicate_database
+			}
+			return &pgconn.PgError{Code: "42710"} // duplicate_object (role)
+		}
+		err := bootstrapDatabase(context.Background(), exists, exec, "bridge", "bridge", "s3cr3t")
+		require.NoError(t, err)
+	})
+
+	t.Run("propagates real errors", func(t *testing.T) {
+		exists := func(_ context.Context, _ string, _ ...any) (bool, error) { return false, nil }
+		exec := func(_ context.Context, _ string) error { return &pgconn.PgError{Code: "42501"} } // insufficient_privilege
+		err := bootstrapDatabase(context.Background(), exists, exec, "bridge", "bridge", "s3cr3t")
+		require.Error(t, err)
+	})
+}
+
+func TestServeMigrationsToggle(t *testing.T) {
+	log := zerolog.Nop()
+
+	t.Run("runs when RUN_MIGRATIONS unset", func(t *testing.T) {
+		t.Setenv("RUN_MIGRATIONS", "")
+		called := false
+		err := runMigrationsIfEnabled(log, func() error { called = true; return nil })
+		require.NoError(t, err)
+		require.True(t, called)
+	})
+
+	t.Run("runs when RUN_MIGRATIONS=1", func(t *testing.T) {
+		t.Setenv("RUN_MIGRATIONS", "1")
+		called := false
+		err := runMigrationsIfEnabled(log, func() error { called = true; return nil })
+		require.NoError(t, err)
+		require.True(t, called)
+	})
+
+	t.Run("skips when RUN_MIGRATIONS=0", func(t *testing.T) {
+		t.Setenv("RUN_MIGRATIONS", "0")
+		called := false
+		err := runMigrationsIfEnabled(log, func() error { called = true; return nil })
+		require.NoError(t, err)
+		require.False(t, called)
+	})
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -15,6 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/rs/zerolog"
 
 	"github.com/madeinlowcode/chatwoot-megaapi-bridge/internal/bridge"
@@ -29,6 +32,14 @@ Usage:
   bridge migrate       Apply embedded migrations
   bridge tenant add    Register a new tenant
   bridge admin add     Create/replace the admin login
+
+Environment (serve):
+  DATABASE_URL         Postgres DSN the app connects to (required).
+  MASTER_KEY           32-byte base64 AES key for tenant secrets (required).
+  POSTGRES_ADMIN_URL   Optional. Maintenance DSN (e.g. postgres://postgres:...@host/postgres)
+                       used on first boot to create the bridge role+database
+                       parsed from DATABASE_URL. Idempotent; omit once provisioned.
+  RUN_MIGRATIONS       Default 1. Set to 0 to skip the boot-time migrate step.
 `
 
 func main() {
@@ -109,11 +120,17 @@ func cmdServe(ctx context.Context, log zerolog.Logger) error {
 	if err != nil {
 		return err
 	}
+	if err := maybeBootstrap(ctx, log, dsn); err != nil {
+		return err
+	}
 	db, err := bridge.NewDB(ctx, dsn)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
+	if err := runMigrationsIfEnabled(log, func() error { return runMigrations(ctx, db, log) }); err != nil {
+		return err
+	}
 	shutdown, err := bridge.InitTracer(ctx)
 	if err != nil {
 		log.Warn().Err(err).Msg("otel init failed; continuing without tracing")
@@ -178,11 +195,123 @@ func cmdMigrate(ctx context.Context, log zerolog.Logger) error {
 		return err
 	}
 	defer db.Close()
+	return runMigrations(ctx, db, log)
+}
+
+func runMigrations(ctx context.Context, db *bridge.DB, log zerolog.Logger) error {
 	files, err := fs.ReadDir(migrations.FS, ".")
 	if err != nil {
 		return err
 	}
 	return applyMigrations(ctx, db, log, files)
+}
+
+// migrationsEnabled gates the boot-time migrate step: any value other than the
+// literal "0" keeps it on so a fresh swarm install self-migrates by default.
+func migrationsEnabled() bool { return getEnv("RUN_MIGRATIONS", "1") != "0" }
+
+func runMigrationsIfEnabled(log zerolog.Logger, runner func() error) error {
+	if !migrationsEnabled() {
+		log.Info().Msg("RUN_MIGRATIONS=0; skipping boot-time migrations")
+		return nil
+	}
+	return runner()
+}
+
+// maybeBootstrap provisions the bridge role+database on the maintenance server
+// pointed at by POSTGRES_ADMIN_URL before the app connects to DATABASE_URL.
+// Without POSTGRES_ADMIN_URL it is a no-op (DB assumed to already exist).
+func maybeBootstrap(ctx context.Context, log zerolog.Logger, dsn string) error {
+	adminURL := os.Getenv("POSTGRES_ADMIN_URL")
+	if adminURL == "" {
+		return nil
+	}
+	role, dbname, password, err := parseDBCreds(dsn)
+	if err != nil {
+		return fmt.Errorf("parse DATABASE_URL for bootstrap: %w", err)
+	}
+	conn, err := pgx.Connect(ctx, adminURL)
+	if err != nil {
+		return fmt.Errorf("connect POSTGRES_ADMIN_URL: %w", err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	exists := func(ctx context.Context, query string, args ...any) (bool, error) {
+		var one int
+		qErr := conn.QueryRow(ctx, query, args...).Scan(&one)
+		if errors.Is(qErr, pgx.ErrNoRows) {
+			return false, nil
+		}
+		if qErr != nil {
+			return false, qErr
+		}
+		return true, nil
+	}
+	exec := func(ctx context.Context, sql string) error {
+		_, eErr := conn.Exec(ctx, sql)
+		return eErr
+	}
+	if err := bootstrapDatabase(ctx, exists, exec, role, dbname, password); err != nil {
+		return err
+	}
+	log.Info().Str("role", role).Str("database", dbname).Msg("database bootstrap complete")
+	return nil
+}
+
+func parseDBCreds(dsn string) (role, dbname, password string, err error) {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return "", "", "", err
+	}
+	role = u.User.Username()
+	password, _ = u.User.Password()
+	dbname = strings.TrimPrefix(u.Path, "/")
+	if role == "" || dbname == "" {
+		return "", "", "", errors.New("DATABASE_URL must contain user and database name")
+	}
+	return role, dbname, password, nil
+}
+
+// bootstrapDatabase creates the role and database when missing. CREATE ROLE/
+// DATABASE cannot bind parameters, so identifiers are sanitized via
+// pgx.Identifier and the password literal is single-quote escaped. Existence is
+// checked first; a concurrent creator's duplicate error is treated as success.
+func bootstrapDatabase(
+	ctx context.Context,
+	exists func(ctx context.Context, query string, args ...any) (bool, error),
+	exec func(ctx context.Context, sql string) error,
+	role, dbname, password string,
+) error {
+	roleExists, err := exists(ctx, "SELECT 1 FROM pg_roles WHERE rolname = $1", role)
+	if err != nil {
+		return err
+	}
+	if !roleExists {
+		stmt := fmt.Sprintf("CREATE ROLE %s LOGIN PASSWORD %s", pgx.Identifier{role}.Sanitize(), quoteLiteral(password)) // #nosec G201 -- identifier sanitized, literal escaped; DDL cannot bind params
+		if err := exec(ctx, stmt); err != nil && !isAlreadyExists(err) {
+			return err
+		}
+	}
+	dbExists, err := exists(ctx, "SELECT 1 FROM pg_database WHERE datname = $1", dbname)
+	if err != nil {
+		return err
+	}
+	if !dbExists {
+		stmt := fmt.Sprintf("CREATE DATABASE %s OWNER %s", pgx.Identifier{dbname}.Sanitize(), pgx.Identifier{role}.Sanitize()) // #nosec G201 -- identifiers sanitized; DDL cannot bind params
+		if err := exec(ctx, stmt); err != nil && !isAlreadyExists(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func quoteLiteral(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+
+func isAlreadyExists(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "42710" || pgErr.Code == "42P04" // duplicate_object / duplicate_database
+	}
+	return false
 }
 
 func applyMigrations(ctx context.Context, db *bridge.DB, log zerolog.Logger, files []fs.DirEntry) error {
