@@ -62,7 +62,7 @@ services:
     command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
 
   bridge:
-    image: ${BRIDGE_IMAGE:-ghcr.io/madeinlowcode/chatwoot-megaapi-bridge:latest}
+    image: ${BRIDGE_IMAGE:-ghcr.io/giovani-junior-dev/chatwoot-megaapi-bridge:latest}
     restart: unless-stopped
     depends_on:
       postgres:

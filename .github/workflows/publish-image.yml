@@ -30,8 +30,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/madeinlowcode/chatwoot-megaapi-bridge
+          images: ghcr.io/giovani-junior-dev/chatwoot-megaapi-bridge
           tags: |
+            type=ref,event=tag
             type=semver,pattern={{version}}
             type=raw,value=latest
 

@@ -16,6 +16,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - (none)
 
+## [1.1.1] - 2026-06-02
+
+Swarm deploy enablement. No app behaviour change; drop-in over 1.1.0.
+
+### Added
+- **Boot-time DB bootstrap + migrations** for swarm installs. `bridge serve`
+  auto-creates the `bridge` role/database when `POSTGRES_ADMIN_URL` is set
+  (idempotent) and runs pending migrations unless `RUN_MIGRATIONS=0`.
+- **`install-pack/`** — numbered Docker Swarm stacks (infra, Portainer,
+  Postgres, Cloudflare Tunnel, Chatwoot v4.14.1-ce, bridge, backup) plus a
+  PT-BR step-by-step guide. Cloudflare Tunnel routing, no Traefik, local
+  storage.
+- **`publish-image` GitHub Action** builds and pushes the bridge image to
+  `ghcr.io/giovani-junior-dev/chatwoot-megaapi-bridge` on every `v*` tag.
+
+### Fixed
+- GHCR image namespace corrected from `madeinlowcode` to the repo owner
+  `giovani-junior-dev` so the Actions `GITHUB_TOKEN` can publish it.
+
 ## [1.1.0] - 2026-06-01
 
 Admin UI overhaul (design system + responsive shell) plus the self-service
@@ -174,7 +193,8 @@ Tag pushed and GitHub release published 2026-05-25:
 - See `docs/release/RELEASE_NOTES.md` for the full upgrade story from 0.x and
   for the supported configuration matrix.
 
-[Unreleased]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/releases/tag/v1.0.0
