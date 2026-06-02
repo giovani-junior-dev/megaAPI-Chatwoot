@@ -1,11 +1,27 @@
 version: "3.7"
 
-# chatwoot-megaapi-bridge — Docker Swarm stack.
-# Deploy:  docker stack deploy -c bridge.yaml bridge
-# Secrets come from the shell environment (never commit real values):
-#   MASTER_KEY, BRIDGE_ENCRYPTION_KEY, POSTGRES_PASSWORD, POSTGRES_ADMIN_URL
-# On the very first deploy set POSTGRES_ADMIN_URL so the bridge creates its own
-# role+database; remove it afterwards. RUN_MIGRATIONS=1 self-migrates on boot.
+###################################################################
+# 06-bridge-admin — chatwoot-megaapi-bridge (esta aplicacao).
+#
+# Liga o Chatwoot ao WhatsApp via megaAPI + painel de administracao.
+# Roteamento: Cloudflare Tunnel (bridge.DOMINIO -> bridge:8080).
+# SEM Traefik, SEM portas abertas.
+#
+# Banco: reaproveita o Postgres do 03-postgres. Na 1a subida o bridge
+# CRIA sozinho o seu role+database `bridge` (idempotente) usando
+# POSTGRES_ADMIN_URL e roda as migrations (RUN_MIGRATIONS=1).
+#
+# >> ANTES DE SUBIR, troque os placeholders MAIUSCULOS (ver .env.modelo):
+#      MASTER_KEY              login do painel  (openssl rand -base64 32)
+#      BRIDGE_ENCRYPTION_KEY   chave AES dos segredos (openssl rand -base64 32)
+#      SENHA_BRIDGE            senha do role `bridge` (voce escolhe)
+#      SENHA_POSTGRES          senha do superusuario postgres (do 03-postgres)
+#
+# Apos a 1a subida bem-sucedida voce PODE remover POSTGRES_ADMIN_URL
+# (o role+DB ja existem). Sem ela, o bridge assume que o DB ja existe.
+#
+# Subir:  docker stack deploy -c bridge.yaml bridge
+###################################################################
 
 services:
   bridge:
@@ -13,13 +29,18 @@ services:
     networks:
       - network_swarm_public
     environment:
-      MASTER_KEY: ${MASTER_KEY}
-      BRIDGE_ENCRYPTION_KEY: ${BRIDGE_ENCRYPTION_KEY}
-      DATABASE_URL: postgres://bridge:${POSTGRES_PASSWORD}@postgres:5432/bridge
-      POSTGRES_ADMIN_URL: ${POSTGRES_ADMIN_URL}
+      # >> TROQUE (openssl rand -base64 32)
+      MASTER_KEY: MASTER_KEY
+      # >> TROQUE (openssl rand -base64 32) — NUNCA mude depois de ter dados
+      BRIDGE_ENCRYPTION_KEY: BRIDGE_ENCRYPTION_KEY
+      # >> TROQUE SENHA_BRIDGE pela senha do role bridge
+      DATABASE_URL: postgres://bridge:SENHA_BRIDGE@postgres:5432/bridge
+      # >> TROQUE SENHA_POSTGRES pelo superusuario (so na 1a subida)
+      POSTGRES_ADMIN_URL: postgres://postgres:SENHA_POSTGRES@postgres:5432/postgres
       RUN_MIGRATIONS: "1"
       BRIDGE_PORT: "8080"
     deploy:
+      mode: replicated
       replicas: 1
       placement:
         constraints:
@@ -34,3 +55,4 @@ services:
 networks:
   network_swarm_public:
     external: true
+    name: network_swarm_public

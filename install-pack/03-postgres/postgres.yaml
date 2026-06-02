@@ -1,0 +1,51 @@
+version: "3.7"
+
+# 03-postgres — banco de dados compartilhado (Chatwoot + bridge).
+#
+# Imagem pgvector/pgvector:pg16 (mesma base do padrao luizeof).
+# DNS interno: outras stacks acessam em  postgres:5432
+#
+# >> ANTES DE SUBIR: troque SENHA_POSTGRES pela senha definida no .env.modelo
+#    (a MESMA senha precisa ir tambem no 05-chatwoot e no 06-bridge-admin).
+#
+# Subir:  docker stack deploy -c postgres.yaml postgres
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    networks:
+      - network_swarm_public
+    entrypoint: docker-entrypoint.sh
+    command:
+      [
+        postgres,
+        --max_connections=200,
+        --wal_level=minimal,
+        --max_wal_senders=0,
+        --port=5432
+      ]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      # >> TROQUE pela senha do .env.modelo (SENHA_POSTGRES)
+      - POSTGRES_PASSWORD=SENHA_POSTGRES
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+
+volumes:
+  postgres_data:
+
+networks:
+  network_swarm_public:
+    external: true
+    name: network_swarm_public

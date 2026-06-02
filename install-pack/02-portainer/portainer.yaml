@@ -1,0 +1,49 @@
+version: "3.7"
+
+# 02-portainer — painel web para gerenciar as stacks.
+#
+# NAO tem labels do Traefik (este pack roteia tudo pelo Cloudflare Tunnel).
+# Acesso ao painel: ver opcoes no 00-LEIA-PRIMEIRO.md (passo 2).
+#
+# Subir (no servidor, dentro desta pasta):
+#   docker stack deploy -c portainer.yaml portainer
+
+services:
+  agent:
+    image: portainer/agent:sts
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+    networks:
+      - network_swarm_public
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.platform.os == linux
+
+  portainer:
+    image: portainer/portainer-ce:sts
+    command: -H tcp://tasks.agent:9001 --tlsskipverify
+    volumes:
+      - portainer_data:/data
+    networks:
+      - network_swarm_public
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+volumes:
+  portainer_data:
+
+networks:
+  network_swarm_public:
+    external: true
+    name: network_swarm_public

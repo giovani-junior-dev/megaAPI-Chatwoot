@@ -1,0 +1,32 @@
+version: "3.8"
+
+# 04-cloudflared — Cloudflare Tunnel.
+#
+# E ele que expoe o Chatwoot e o bridge na internet COM HTTPS, sem precisar
+# abrir as portas 80/443 do servidor e sem certificado manual.
+#
+# >> ANTES DE SUBIR: troque TOKEN_DO_TUNNEL pelo token gerado no painel
+#    Cloudflare Zero Trust (ver 00-LEIA-PRIMEIRO.md, passo 5).
+#
+# Os hostnames publicos (chat.DOMINIO -> chatwoot_admin:3000,
+# bridge.DOMINIO -> bridge:8080) sao configurados NO PAINEL da Cloudflare
+# (Public Hostnames), nao aqui.
+#
+# Subir:  docker stack deploy -c cloudflared.yaml cloudflared
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    networks:
+      - network_swarm_public
+    # >> TROQUE TOKEN_DO_TUNNEL pelo token do seu tunnel.
+    command: tunnel --no-autoupdate --protocol auto run --token TOKEN_DO_TUNNEL
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+
+networks:
+  network_swarm_public:
+    external: true
+    name: network_swarm_public
