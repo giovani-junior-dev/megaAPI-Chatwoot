@@ -30,13 +30,13 @@ services:
       - network_swarm_public
     environment:
       # >> TROQUE (openssl rand -base64 32)
-      MASTER_KEY: MASTER_KEY
+      MASTER_KEY: ${MASTER_KEY}
       # >> TROQUE (openssl rand -base64 32) — NUNCA mude depois de ter dados
-      BRIDGE_ENCRYPTION_KEY: BRIDGE_ENCRYPTION_KEY
+      BRIDGE_ENCRYPTION_KEY: ${BRIDGE_ENCRYPTION_KEY}
       # >> TROQUE SENHA_BRIDGE pela senha do role bridge
-      DATABASE_URL: postgres://bridge:SENHA_BRIDGE@postgres:5432/bridge
+      DATABASE_URL: postgres://bridge:${SENHA_BRIDGE}@postgres:5432/bridge
       # >> TROQUE SENHA_POSTGRES pelo superusuario (so na 1a subida)
-      POSTGRES_ADMIN_URL: postgres://postgres:SENHA_POSTGRES@postgres:5432/postgres
+      POSTGRES_ADMIN_URL: postgres://postgres:${SENHA_POSTGRES}@postgres:5432/postgres
       RUN_MIGRATIONS: "1"
       BRIDGE_PORT: "8080"
     deploy:

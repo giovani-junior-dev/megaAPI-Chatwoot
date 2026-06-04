@@ -5,8 +5,35 @@ Portainer, com **Cloudflare Tunnel** dando o HTTPS (sem mexer em DNS A-record,
 sem abrir portas, sem certificado manual).
 
 > **Para quem é:** pessoa não-técnica que tem uma VPS e um domínio na
-> Cloudflare. Você vai **copiar e colar** stacks no Portainer, trocando os
-> campos em MAIÚSCULO pelos seus valores. Sem programar nada.
+> Cloudflare.
+
+---
+
+## ⚡ Instalação automática (recomendada)
+
+Um comando na VPS (Ubuntu, root). Ele pergunta só **domínio, token do tunnel
+e e-mail/senha do admin**, gera o resto dos segredos sozinho e sobe tudo:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/giovani-junior-dev/megaAPI-Chatwoot/master/install-pack/bootstrap.sh)
+```
+
+Ou clonando o repo:
+
+```bash
+git clone https://github.com/giovani-junior-dev/megaAPI-Chatwoot.git
+bash megaAPI-Chatwoot/install-pack/setup.sh
+```
+
+Quando terminar, **falta só** criar os 2 Public Hostnames no Cloudflare Zero
+Trust (passo 5 abaixo): `chat.SEU_DOMINIO → chatwoot_admin:3000` e
+`bridge.SEU_DOMINIO → bridge:8080`.
+
+> Prefere ser guiado por uma IA? Veja [`INSTALL-AGENT.md`](INSTALL-AGENT.md):
+> cole o prompt no Claude Code na VPS e responda as perguntas.
+
+O passo a passo manual abaixo (colar stacks no Portainer) continua válido como
+**alternativa avançada**, caso queira controlar cada etapa.
 
 ---
 

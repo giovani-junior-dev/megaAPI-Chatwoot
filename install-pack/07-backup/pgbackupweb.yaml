@@ -31,9 +31,9 @@ services:
       - pgbackupweb_data:/backups
     environment:
       # >> TROQUE (openssl rand -base64 16)
-      - PBW_ENCRYPTION_KEY=PBW_ENCRYPTION_KEY_20
+      - PBW_ENCRYPTION_KEY=${PBW_ENCRYPTION_KEY}
       # >> TROQUE SENHA_POSTGRES pela senha do superusuario postgres
-      - PBW_POSTGRES_CONN_STRING=postgresql://postgres:SENHA_POSTGRES@postgres:5432/pgbackweb?sslmode=disable
+      - PBW_POSTGRES_CONN_STRING=postgresql://postgres:${SENHA_POSTGRES}@postgres:5432/pgbackweb?sslmode=disable
       - TZ=America/Sao_Paulo
     deploy:
       mode: replicated

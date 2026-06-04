@@ -29,7 +29,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     environment:
       # >> TROQUE pela senha do .env.modelo (SENHA_POSTGRES)
-      - POSTGRES_PASSWORD=SENHA_POSTGRES
+      - POSTGRES_PASSWORD=${SENHA_POSTGRES}
       - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
     deploy:
       mode: replicated

@@ -20,7 +20,7 @@ services:
     networks:
       - network_swarm_public
     # >> TROQUE TOKEN_DO_TUNNEL pelo token do seu tunnel.
-    command: tunnel --no-autoupdate --protocol auto run --token TOKEN_DO_TUNNEL
+    command: tunnel --no-autoupdate --protocol auto run --token ${TOKEN_DO_TUNNEL}
     deploy:
       mode: global
       restart_policy:
