@@ -33,7 +33,10 @@ ask_secret() { local var="$1" prompt="$2" cur="${!1:-}"; if [[ -n "$cur" ]]; the
 ensure_docker() {
   if ! command -v docker >/dev/null 2>&1; then
     log "instalando docker..."
-    apt-get update -y && apt-get install -y docker.io docker-compose-plugin
+    # docker.io (repo Ubuntu) basta para Swarm; docker stack deploy nao depende
+    # do compose-plugin. Fallback para o script oficial se docker.io faltar.
+    apt-get update -y
+    apt-get install -y docker.io || curl -fsSL https://get.docker.com | sh
     systemctl enable --now docker
   fi
 }
