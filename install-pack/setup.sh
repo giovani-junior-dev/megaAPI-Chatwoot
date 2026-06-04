@@ -103,6 +103,9 @@ main() {
   deploy portainer   02-portainer/portainer.yaml
   deploy postgres    03-postgres/postgres.yaml
   wait_service postgres_postgres 120
+  # banco interno do pgbackweb (idempotente)
+  local pg; pg="$(task_cid postgres_postgres)"
+  [[ -n "$pg" ]] && docker exec "$pg" psql -U postgres -c "CREATE DATABASE pgbackweb" >/dev/null 2>&1 || true
   deploy cloudflared 04-cloudflared/cloudflared.yaml
   deploy chatwoot    05-chatwoot/chatwoot.yaml
   deploy bridge      06-bridge-admin/bridge.yaml
