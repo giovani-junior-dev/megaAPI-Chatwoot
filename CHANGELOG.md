@@ -16,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - (none)
 
+## [1.1.3] - 2026-06-05
+
+### Added
+- **Wizard inbox safeguard.** Tenant creation now fetches the Chatwoot inbox
+  secret BEFORE inserting the tenant. If the inbox (type API) does not exist or
+  the Account ID / Inbox ID / token are wrong, it returns a clear PT-BR 400 and
+  creates nothing — preventing a half-configured tenant (empty webhook_url, no
+  token) whose outbound silently failed. The fetched secret is persisted and
+  embedded as the webhook `?token`.
+
 ## [1.1.2] - 2026-06-05
 
 ### Fixed
@@ -208,7 +218,8 @@ Tag pushed and GitHub release published 2026-05-25:
 - See `docs/release/RELEASE_NOTES.md` for the full upgrade story from 0.x and
   for the supported configuration matrix.
 
-[Unreleased]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.1.3...HEAD
+[1.1.3]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.0.1...v1.1.0
