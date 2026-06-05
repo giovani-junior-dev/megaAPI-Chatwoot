@@ -133,6 +133,41 @@ func TestWizardPOSTRejectsMissingField(t *testing.T) {
 	}
 }
 
+func TestValidateSpecSlugPattern(t *testing.T) {
+	base := bridge.TenantSpec{
+		MegaAPIHost: "h", MegaAPIInstance: "i", MegaAPIToken: "t",
+		ChatwootURL: "u", ChatwootToken: "k", ChatwootAccountID: 1, ChatwootInboxID: 1,
+	}
+	for _, bad := range []string{"empresa x", "Empresa", "ab", "x_y", "-abc", "café"} {
+		s := base
+		s.Slug = bad
+		if _, err := validateSpec(s); err == nil {
+			t.Errorf("expected reject for slug %q", bad)
+		}
+	}
+	for _, ok := range []string{"empresa-x", "acme", "a1b2", "tenant-123"} {
+		s := base
+		s.Slug = ok
+		if _, err := validateSpec(s); err != nil {
+			t.Errorf("expected accept for slug %q, got %v", ok, err)
+		}
+	}
+}
+
+func TestWizardPOSTRejectsBadSlug(t *testing.T) {
+	h := newWizardHandler(t, &tenantSink{}, nil)
+	form := validWizardForm()
+	form.Set("slug", "empresa x")
+	req := httptest.NewRequest(http.MethodPost, "/tenants",
+		strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+	require.Contains(t, strings.ToLower(rr.Body.String()), "slug")
+}
+
 func TestWizardPOSTRejectsMissingBaseURL(t *testing.T) {
 	sink := &tenantSink{}
 	key := bridge.RandomBytes(32)

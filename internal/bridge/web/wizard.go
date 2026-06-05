@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -131,10 +132,17 @@ func readWizardForm(r *http.Request) (bridge.TenantSpec, error) {
 	})
 }
 
+// slugPattern mirrors the tenants_slug_check DB constraint so the wizard can
+// reject a bad slug with a friendly message instead of a generic 500.
+var slugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{2,63}$`)
+
 func validateSpec(s bridge.TenantSpec) (bridge.TenantSpec, error) {
 	if s.Slug == "" || s.MegaAPIHost == "" || s.MegaAPIInstance == "" || s.MegaAPIToken == "" ||
 		s.ChatwootURL == "" || s.ChatwootToken == "" || s.ChatwootAccountID == 0 || s.ChatwootInboxID == 0 {
 		return s, errAllFieldsRequired
+	}
+	if !slugPattern.MatchString(s.Slug) {
+		return s, errInvalidSlug
 	}
 	return s, nil
 }
@@ -145,6 +153,8 @@ func isUniqueViolation(err error) bool {
 }
 
 var errAllFieldsRequired = wizardErr("todos os campos são obrigatórios")
+
+var errInvalidSlug = wizardErr("slug inválido: use apenas minúsculas, números e hífen (ex: empresa-x), de 3 a 64 caracteres")
 
 type wizardErr string
 
