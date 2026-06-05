@@ -55,9 +55,13 @@ gen_env() {
   log "gerando segredos..."
   ask CHATWOOT_HOST "Hostname do Chatwoot (ex: chatwoot.suaempresa.com)"
   ask BRIDGE_HOST "Hostname do painel bridge (ex: bridge.suaempresa.com)"
+  ask PORTAINER_HOST "Hostname do Portainer (ex: portainer.suaempresa.com)"
+  ask BACKUP_HOST "Hostname do painel de backup (ex: backup.suaempresa.com)"
   ask TOKEN_DO_TUNNEL "Token do Cloudflare Tunnel (eyJ...)"
   ask ADMIN_EMAIL "E-mail do admin do painel bridge"
   ask_secret ADMIN_PASSWORD "Senha do admin do painel bridge"
+  ask_secret PORTAINER_PASSWORD "Senha do admin do Portainer (min 12 caracteres)"
+  [[ ${#PORTAINER_PASSWORD} -ge 12 ]] || die "PORTAINER_PASSWORD precisa de no minimo 12 caracteres"
   local MASTER_KEY BRIDGE_ENCRYPTION_KEY SECRET_KEY_BASE PBW_ENCRYPTION_KEY SENHA_POSTGRES SENHA_BRIDGE
   MASTER_KEY="$(openssl rand -base64 32)"
   BRIDGE_ENCRYPTION_KEY="$(openssl rand -base64 32)"
@@ -69,6 +73,9 @@ gen_env() {
   cat > "$ENV_FILE" <<EOF
 CHATWOOT_HOST='$CHATWOOT_HOST'
 BRIDGE_HOST='$BRIDGE_HOST'
+PORTAINER_HOST='$PORTAINER_HOST'
+BACKUP_HOST='$BACKUP_HOST'
+PORTAINER_PASSWORD='$PORTAINER_PASSWORD'
 TOKEN_DO_TUNNEL='$TOKEN_DO_TUNNEL'
 SENHA_POSTGRES='$SENHA_POSTGRES'
 SENHA_BRIDGE='$SENHA_BRIDGE'
@@ -105,6 +112,11 @@ main() {
   set -a; # shellcheck disable=SC1090
   . "$ENV_FILE"; set +a
 
+  # secret com a senha do admin do Portainer (texto puro; o Portainer faz o hash
+  # via --admin-password-file). rm+create e idempotente no 1o run; em reexecucao
+  # o secret em uso nao e removido (mantem a senha atual).
+  docker secret rm portainer_admin_password >/dev/null 2>&1 || true
+  printf '%s' "$PORTAINER_PASSWORD" | docker secret create portainer_admin_password - >/dev/null 2>&1 || true
   deploy portainer   02-portainer/portainer.yaml
   deploy postgres    03-postgres/postgres.yaml
   wait_service postgres_postgres 120
@@ -133,12 +145,20 @@ main() {
   cat <<EOF
 
 === Instalacao concluida ===
-  Chatwoot:  https://${CHATWOOT_HOST}
-  Bridge:    https://${BRIDGE_HOST}   (login: ${ADMIN_EMAIL:-defina via 'bridge admin add'})
+  Chatwoot:   https://${CHATWOOT_HOST}
+  Bridge:     https://${BRIDGE_HOST}    (login: ${ADMIN_EMAIL:-defina via 'bridge admin add'})
+  Portainer:  https://${PORTAINER_HOST} (login: admin / a senha que voce definiu)
+  Backup:     https://${BACKUP_HOST}
 
-  FALTA criar os 2 Public Hostnames no Cloudflare Zero Trust:
-    ${CHATWOOT_HOST}   -> HTTP -> chatwoot_admin:3000
-    ${BRIDGE_HOST} -> HTTP -> bridge:8080
+  FALTA criar os 4 Public Hostnames no Cloudflare Zero Trust (Type = HTTP):
+    ${CHATWOOT_HOST}  -> chatwoot_admin:3000
+    ${BRIDGE_HOST}    -> bridge:8080
+    ${PORTAINER_HOST} -> portainer:9000
+    ${BACKUP_HOST}    -> pgbackupweb:8085
+
+  IMPORTANTE: use subdominios de 1 nivel (ex: chatwoot.seudominio.com).
+  Subdominio de 2 niveis (chat.chatwoot.seudominio.com) quebra o SSL gratis
+  do Cloudflare (*.seudominio.com nao cobre 2 niveis).
 
   Segredos em: $ENV_FILE  (NUNCA comite este arquivo)
 EOF

@@ -25,9 +25,23 @@ git clone https://github.com/giovani-junior-dev/megaAPI-Chatwoot.git
 bash megaAPI-Chatwoot/install-pack/setup.sh
 ```
 
-Quando terminar, **falta só** criar os 2 Public Hostnames no Cloudflare Zero
-Trust (passo 5 abaixo): `chat.SEU_DOMINIO → chatwoot_admin:3000` e
-`bridge.SEU_DOMINIO → bridge:8080`.
+Quando terminar, **falta só** criar os Public Hostnames no Cloudflare Zero
+Trust (passo 5 abaixo), todos com **Type = HTTP**:
+
+| Hostname (o que você escolheu) | Service |
+|--------------------------------|---------|
+| `CHATWOOT_HOST`  | `chatwoot_admin:3000` |
+| `BRIDGE_HOST`    | `bridge:8080` |
+| `PORTAINER_HOST` | `portainer:9000` |
+| `BACKUP_HOST`    | `pgbackupweb:8085` |
+
+> ⚠️ **SSL:** use subdomínio de **1 nível** (`chatwoot.seudominio.com`). Dois
+> níveis (`chat.chatwoot.seudominio.com`) **quebram** o certificado grátis do
+> Cloudflare — ele só cobre `seudominio.com` e `*.seudominio.com`. Sintoma:
+> `SSL handshake failure` / página não abre.
+
+> O admin do **Portainer** já é criado no boot (usuário `admin` + a senha que
+> você informou) — sem o timeout de 5 minutos.
 
 > Prefere ser guiado por uma IA? Veja [`INSTALL-AGENT.md`](INSTALL-AGENT.md):
 > cole o prompt no Claude Code na VPS e responda as perguntas.

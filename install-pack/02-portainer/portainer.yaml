@@ -24,11 +24,16 @@ services:
 
   portainer:
     image: portainer/portainer-ce:sts
-    command: -H tcp://tasks.agent:9001 --tlsskipverify
+    # --admin-password-file pre-cria o usuario admin no 1o boot (acaba o
+    # timeout de 5 min). A senha (texto puro) vem do docker secret criado
+    # pelo setup.sh. Username = admin.
+    command: -H tcp://tasks.agent:9001 --tlsskipverify --admin-password-file /run/secrets/portainer_admin_password
     volumes:
       - portainer_data:/data
     networks:
       - network_swarm_public
+    secrets:
+      - portainer_admin_password
     deploy:
       mode: replicated
       replicas: 1
@@ -42,6 +47,11 @@ services:
 
 volumes:
   portainer_data:
+
+secrets:
+  # criado pelo setup.sh: docker secret create portainer_admin_password
+  portainer_admin_password:
+    external: true
 
 networks:
   network_swarm_public:
