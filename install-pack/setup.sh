@@ -53,7 +53,8 @@ ensure_network() {
 gen_env() {
   if [[ -f "$ENV_FILE" ]]; then log ".env existente — reaproveitando"; return; fi
   log "gerando segredos..."
-  ask DOMINIO "Dominio raiz (ex: minhaempresa.com.br)"
+  ask CHATWOOT_HOST "Hostname do Chatwoot (ex: chatwoot.suaempresa.com)"
+  ask BRIDGE_HOST "Hostname do painel bridge (ex: bridge.suaempresa.com)"
   ask TOKEN_DO_TUNNEL "Token do Cloudflare Tunnel (eyJ...)"
   ask ADMIN_EMAIL "E-mail do admin do painel bridge"
   ask_secret ADMIN_PASSWORD "Senha do admin do painel bridge"
@@ -66,7 +67,8 @@ gen_env() {
   SENHA_BRIDGE="$(openssl rand -hex 24)"
   umask 077
   cat > "$ENV_FILE" <<EOF
-DOMINIO='$DOMINIO'
+CHATWOOT_HOST='$CHATWOOT_HOST'
+BRIDGE_HOST='$BRIDGE_HOST'
 TOKEN_DO_TUNNEL='$TOKEN_DO_TUNNEL'
 SENHA_POSTGRES='$SENHA_POSTGRES'
 SENHA_BRIDGE='$SENHA_BRIDGE'
@@ -131,12 +133,12 @@ main() {
   cat <<EOF
 
 === Instalacao concluida ===
-  Chatwoot:  https://chat.${DOMINIO}
-  Bridge:    https://bridge.${DOMINIO}   (login: ${ADMIN_EMAIL:-defina via 'bridge admin add'})
+  Chatwoot:  https://${CHATWOOT_HOST}
+  Bridge:    https://${BRIDGE_HOST}   (login: ${ADMIN_EMAIL:-defina via 'bridge admin add'})
 
   FALTA criar os 2 Public Hostnames no Cloudflare Zero Trust:
-    chat.${DOMINIO}   -> HTTP -> chatwoot_admin:3000
-    bridge.${DOMINIO} -> HTTP -> bridge:8080
+    ${CHATWOOT_HOST}   -> HTTP -> chatwoot_admin:3000
+    ${BRIDGE_HOST} -> HTTP -> bridge:8080
 
   Segredos em: $ENV_FILE  (NUNCA comite este arquivo)
 EOF

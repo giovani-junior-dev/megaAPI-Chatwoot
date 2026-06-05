@@ -132,7 +132,7 @@ Crie o usuário **admin** do Portainer e **escolha uma senha forte**.
 ## Passo 3 — Conferir seus valores (.env.modelo)
 
 Abra o [`.env.modelo`](.env.modelo) e confira que todos os campos estão
-preenchidos: `DOMINIO`, `SENHA_POSTGRES`, `CHAVE_SECRETA_64`, `MASTER_KEY`,
+preenchidos: `CHATWOOT_HOST`, `BRIDGE_HOST`, `SENHA_POSTGRES`, `CHAVE_SECRETA_64`, `MASTER_KEY`,
 `BRIDGE_ENCRYPTION_KEY`, `SENHA_BRIDGE`, `TOKEN_DO_TUNNEL`,
 `PBW_ENCRYPTION_KEY_20`.
 
@@ -187,7 +187,8 @@ No Portainer: **Add stack**, nome `chatwoot`, cole
 **Troque**:
 - `SENHA_POSTGRES` → a mesma senha do passo 4.
 - `CHAVE_SECRETA_64` → seu `SECRET_KEY_BASE`.
-- `DOMINIO` → seu domínio (no campo `FRONTEND_URL: https://chat.DOMINIO`).
+- `CHATWOOT_HOST` → o endereço do Chatwoot (campo `FRONTEND_URL: https://${CHATWOOT_HOST}`).
+- `BRIDGE_HOST` → o endereço do painel bridge (usado no resumo/ingress).
 
 Deploy. Espere os serviços `chatwoot_admin`, `chatwoot_api`,
 `chatwoot_sidekiq` e `redis` ficarem **running**.

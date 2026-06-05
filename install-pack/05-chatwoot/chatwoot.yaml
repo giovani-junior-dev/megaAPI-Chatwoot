@@ -38,7 +38,7 @@ services:
       # >> TROQUE: openssl rand -hex 32
       - SECRET_KEY_BASE=${SECRET_KEY_BASE}
       # >> TROQUE DOMINIO (deve casar com o ingress da Cloudflare)
-      - FRONTEND_URL=https://chat.${DOMINIO}
+      - FRONTEND_URL=https://${CHATWOOT_HOST}
       - DEFAULT_LOCALE=pt-BR
       # HTTPS terminado no Cloudflare Tunnel -> FORCE_SSL desligado
       - FORCE_SSL=false
@@ -83,7 +83,7 @@ services:
       - RAILS_ENV=production
       - INSTALLATION_ENV=docker
       - SECRET_KEY_BASE=${SECRET_KEY_BASE}
-      - FRONTEND_URL=https://chat.${DOMINIO}
+      - FRONTEND_URL=https://${CHATWOOT_HOST}
       - DEFAULT_LOCALE=pt-BR
       - FORCE_SSL=false
       - ENABLE_ACCOUNT_SIGNUP=false
@@ -124,7 +124,7 @@ services:
       - RAILS_ENV=production
       - INSTALLATION_ENV=docker
       - SECRET_KEY_BASE=${SECRET_KEY_BASE}
-      - FRONTEND_URL=https://chat.${DOMINIO}
+      - FRONTEND_URL=https://${CHATWOOT_HOST}
       - DEFAULT_LOCALE=pt-BR
       - FORCE_SSL=false
       - RAILS_LOG_TO_STDOUT=true
