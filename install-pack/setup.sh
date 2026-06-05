@@ -107,26 +107,61 @@ task_cid() { docker ps --filter "name=$1" -q | head -1; }
 
 # pcurl: roda curl num container efemero na overlay (host nao alcanca portainer:9000)
 pcurl() { docker run --rm --network "$NET" curlimages/curl:latest -s "$@"; }
+# pcurl_mnt: idem, montando o install-pack em /work (para upload de arquivo)
+pcurl_mnt() { docker run --rm --network "$NET" -v "$SCRIPT_DIR:/work:ro" curlimages/curl:latest -s "$@"; }
 
-# ensure_portainer_env registra o ambiente swarm no Portainer via API. Necessario
-# porque o Portainer nao usa -H (evita race no boot); o ambiente e criado aqui.
-ensure_portainer_env() {
-  local i=0 jwt eps
+PJWT="" ; PEID="" ; PSWARM="" ; PENV="[]" ; PORTAINER_OK=0
+
+# portainer_ctx: faz login, garante o ambiente swarm e prepara o contexto
+# (PJWT/PEID/PSWARM/PENV) usado pelo deploy via API. Sem -H no Portainer, o
+# ambiente e registrado aqui de forma deterministica (evita race no boot).
+portainer_ctx() {
+  local i=0
   while (( i < 60 )); do
-    jwt="$(pcurl --max-time 8 -X POST http://portainer:9000/api/auth -H 'Content-Type: application/json' \
+    PJWT="$(pcurl --max-time 8 -X POST http://portainer:9000/api/auth -H 'Content-Type: application/json' \
       -d "{\"username\":\"admin\",\"password\":\"$PORTAINER_PASSWORD\"}" 2>/dev/null | sed 's/.*"jwt":"//;s/".*//')"
-    [[ ${#jwt} -gt 20 ]] && break
+    [[ ${#PJWT} -gt 20 ]] && break
     sleep 3; i=$((i+3))
   done
-  [[ ${#jwt} -gt 20 ]] || { warn "Portainer API nao respondeu; adicione o ambiente manualmente"; return; }
-  eps="$(pcurl --max-time 8 http://portainer:9000/api/endpoints -H "Authorization: Bearer $jwt" 2>/dev/null)"
+  [[ ${#PJWT} -gt 20 ]] || { warn "Portainer API indisponivel; usando deploy via CLI (stacks ficam 'Limited')"; return; }
+  local eps; eps="$(pcurl --max-time 8 http://portainer:9000/api/endpoints -H "Authorization: Bearer $PJWT" 2>/dev/null)"
   if [[ "$eps" == "[]" ]]; then
     log "registrando ambiente swarm no Portainer"
-    pcurl --max-time 15 -X POST http://portainer:9000/api/endpoints -H "Authorization: Bearer $jwt" \
+    pcurl --max-time 15 -X POST http://portainer:9000/api/endpoints -H "Authorization: Bearer $PJWT" \
       -F "Name=swarm-local" -F "EndpointCreationType=2" -F "URL=tcp://tasks.agent:9001" \
-      -F "TLS=true" -F "TLSSkipVerify=true" -F "TLSSkipClientVerify=true" >/dev/null 2>&1 \
-      && log "ambiente Portainer OK" || warn "falha ao registrar ambiente Portainer (adicione manual)"
+      -F "TLS=true" -F "TLSSkipVerify=true" -F "TLSSkipClientVerify=true" >/dev/null 2>&1 || true
   fi
+  PEID="$(pcurl --max-time 8 http://portainer:9000/api/endpoints -H "Authorization: Bearer $PJWT" 2>/dev/null | sed 's/.*"Id"://;s/[^0-9].*//' )"
+  PSWARM="$(pcurl --max-time 8 "http://portainer:9000/api/endpoints/$PEID/docker/swarm" -H "Authorization: Bearer $PJWT" 2>/dev/null | sed 's/.*"ID":"//;s/".*//')"
+  # monta o array de env (todas as vars do .env) para o Portainer interpolar ${VAR}
+  PENV="$(python3 - "$ENV_FILE" <<'PY'
+import sys,json
+out=[]
+for line in open(sys.argv[1]):
+    line=line.strip()
+    if not line or line.startswith('#') or '=' not in line: continue
+    k,v=line.split('=',1)
+    out.append({"name":k.strip(),"value":v.strip().strip("'").strip('"')})
+print(json.dumps(out))
+PY
+)"
+  [[ -n "$PEID" && -n "$PSWARM" && -n "$PENV" ]] && PORTAINER_OK=1 || warn "contexto Portainer incompleto; deploy via CLI"
+}
+
+# deploy_api: cria a stack VIA Portainer (controle total/editavel na GUI).
+# Faz fallback para CLI (docker stack deploy) se a API nao estiver pronta.
+deploy_api() { # deploy_api <name> <rel-yaml>
+  if [[ "$PORTAINER_OK" != "1" ]]; then deploy "$1" "$2"; return; fi
+  log "deploy (Portainer) stack '$1'"
+  local code
+  code="$(pcurl_mnt -o /dev/null -w '%{http_code}' --max-time 90 \
+    -X POST "http://portainer:9000/api/stacks/create/swarm/file?endpointId=$PEID" \
+    -H "Authorization: Bearer $PJWT" \
+    -F "Name=$1" -F "SwarmID=$PSWARM" -F "Env=$PENV" -F "file=@/work/$2" 2>/dev/null)"
+  if [[ "$code" =~ ^2 ]]; then return; fi
+  if [[ "$code" == "409" ]]; then log "stack '$1' ja existe no Portainer (mantida)"; return; fi
+  warn "deploy via API de '$1' retornou $code; tentando CLI"
+  deploy "$1" "$2"
 }
 
 main() {
@@ -141,16 +176,20 @@ main() {
   # o secret em uso nao e removido (mantem a senha atual).
   docker secret rm portainer_admin_password >/dev/null 2>&1 || true
   printf '%s' "$PORTAINER_PASSWORD" | docker secret create portainer_admin_password - >/dev/null 2>&1 || true
+  # Portainer sobe via CLI (bootstrap). As demais stacks sobem VIA Portainer
+  # (API) para ficarem com controle total/editaveis na GUI.
   deploy portainer   02-portainer/portainer.yaml
-  deploy postgres    03-postgres/postgres.yaml
+  log "preparando Portainer..."; wait_service portainer_portainer 90; portainer_ctx
+
+  deploy_api postgres    03-postgres/postgres.yaml
   wait_service postgres_postgres 120
   # banco interno do pgbackweb (idempotente)
   local pg; pg="$(task_cid postgres_postgres)"
   [[ -n "$pg" ]] && docker exec "$pg" psql -U postgres -c "CREATE DATABASE pgbackweb" >/dev/null 2>&1 || true
-  deploy cloudflared 04-cloudflared/cloudflared.yaml
-  deploy chatwoot    05-chatwoot/chatwoot.yaml
-  deploy bridge      06-bridge-admin/bridge.yaml
-  deploy pgbackupweb 07-backup/pgbackupweb.yaml
+  deploy_api cloudflared 04-cloudflared/cloudflared.yaml
+  deploy_api chatwoot    05-chatwoot/chatwoot.yaml
+  deploy_api bridge      06-bridge-admin/bridge.yaml
+  deploy_api pgbackupweb 07-backup/pgbackupweb.yaml
 
   log "esperando chatwoot_admin..."; wait_service chatwoot_chatwoot_admin 240
   local cw; cw="$(task_cid chatwoot_chatwoot_admin)"
@@ -158,8 +197,6 @@ main() {
     log "preparando banco do Chatwoot (db:chatwoot_prepare)"
     docker exec "$cw" bundle exec rails db:chatwoot_prepare || warn "db:chatwoot_prepare falhou — rode manualmente"
   fi
-
-  log "registrando ambiente no Portainer..."; ensure_portainer_env
 
   log "esperando bridge..."; wait_service bridge_bridge 120
   local br; br="$(task_cid bridge_bridge)"
