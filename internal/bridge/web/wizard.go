@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -59,30 +60,34 @@ func (h *Handler) handleTenantCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.fireMegaAPIConfig(r, spec, bearer)
-	h.fireChatwootConfig(r, spec)
-	h.pairChatwootHMAC(r.Context(), spec, id)
+	cwToken := h.pairChatwootHMAC(r.Context(), spec, id)
+	h.fireChatwootConfig(r, spec, cwToken)
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-func (h *Handler) pairChatwootHMAC(ctx context.Context, spec bridge.TenantSpec, id uuid.UUID) {
+// pairChatwootHMAC fetches the Chatwoot inbox secret, persists it as the tenant
+// secret, and returns it (plaintext) so the caller can embed it as the ?token
+// on the inbox webhook_url. Returns "" when no secret is available.
+func (h *Handler) pairChatwootHMAC(ctx context.Context, spec bridge.TenantSpec, id uuid.UUID) string {
 	if h.deps.FetchCwHMAC == nil || h.deps.UpdateTenantHMAC == nil {
-		return
+		return ""
 	}
 	token, err := h.deps.FetchCwHMAC(ctx, ChatwootWebhookConfig{
 		BaseURL: spec.ChatwootURL, Token: spec.ChatwootToken,
 		AccountID: spec.ChatwootAccountID, InboxID: spec.ChatwootInboxID,
 	})
 	if err != nil || token == "" {
-		return
+		return ""
 	}
 	enc, err := bridge.Encrypt([]byte(token), h.deps.Key)
 	if err != nil {
-		return
+		return ""
 	}
 	_ = h.deps.UpdateTenantHMAC(ctx, id, enc)
+	return token
 }
 
-func (h *Handler) fireChatwootConfig(r *http.Request, spec bridge.TenantSpec) {
+func (h *Handler) fireChatwootConfig(r *http.Request, spec bridge.TenantSpec, token string) {
 	if h.deps.ConfigCwWebhook == nil || h.deps.GetSetting == nil {
 		return
 	}
@@ -90,11 +95,17 @@ func (h *Handler) fireChatwootConfig(r *http.Request, spec bridge.TenantSpec) {
 	if base == "" {
 		return
 	}
-	url := strings.TrimRight(base, "/") + "/v1/cw/" + spec.Slug
+	// The Chatwoot v4 API-channel outgoing webhook is not HMAC-signed, so the
+	// bridge authenticates it by a token in the URL (matched against the tenant
+	// secret). Omit it when unknown to preserve the no-secret behaviour.
+	webhookURL := strings.TrimRight(base, "/") + "/v1/cw/" + spec.Slug
+	if token != "" {
+		webhookURL += "?token=" + url.QueryEscape(token)
+	}
 	_ = h.deps.ConfigCwWebhook(r.Context(), ChatwootWebhookConfig{
 		BaseURL: spec.ChatwootURL, Token: spec.ChatwootToken,
 		AccountID: spec.ChatwootAccountID, InboxID: spec.ChatwootInboxID,
-		WebhookURL: url,
+		WebhookURL: webhookURL,
 	})
 }
 

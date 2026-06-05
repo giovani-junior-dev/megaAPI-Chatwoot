@@ -174,7 +174,7 @@ func (s *Server) handleCWWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if os.Getenv("DEBUG_SKIP_HMAC") != "1" {
-		authed, err := s.checkHMAC(r, tenant, body)
+		authed, err := s.checkCWAuth(r, tenant, body)
 		if err != nil {
 			s.Log.Err(err).Str("tenant_id", tenant.ID.String()).Msg("decrypt hmac secret")
 			http.Error(w, "crypto error", http.StatusInternalServerError)
@@ -271,6 +271,25 @@ func (s *Server) checkBearer(r *http.Request, t Tenant) (bool, error) {
 		return false, nil
 	}
 	return subtle.ConstantTimeCompare([]byte(got), tok) == 1, nil
+}
+
+// checkCWAuth authenticates the Chatwoot->bridge webhook. Primary path is a
+// token in the URL (?token=), set by the wizard on the Chatwoot inbox
+// webhook_url and matched against the tenant secret in constant time — the same
+// pattern used by the megaAPI direction. Chatwoot's API-channel outgoing webhook
+// does not HMAC-sign the payload, so the legacy header check (checkHMAC) is only
+// a fallback when a signature is actually present.
+func (s *Server) checkCWAuth(r *http.Request, t Tenant, body []byte) (bool, error) {
+	if tok := r.URL.Query().Get("token"); tok != "" {
+		secret, err := Decrypt(t.HMACSecretEnc, s.Key)
+		if err != nil {
+			return false, err
+		}
+		if subtle.ConstantTimeCompare([]byte(tok), secret) == 1 {
+			return true, nil
+		}
+	}
+	return s.checkHMAC(r, t, body)
 }
 
 func (s *Server) checkHMAC(r *http.Request, t Tenant, body []byte) (bool, error) {

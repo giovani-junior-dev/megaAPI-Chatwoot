@@ -16,6 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - (none)
 
+## [1.1.2] - 2026-06-05
+
+### Fixed
+- **Chatwoot -> bridge webhook authentication.** The `/v1/cw/{slug}` endpoint
+  required an `X-Chatwoot-Signature` HMAC header, but Chatwoot 4.x does not sign
+  the API-channel outgoing webhook, so every outbound (agent reply) message
+  failed with 401 ("Falha ao enviar"). The bridge now authenticates by a token
+  in the webhook URL (`?token=`), matched in constant time against the tenant
+  secret — the same pattern already used for the megaAPI direction. The HMAC
+  header remains accepted as a fallback when present. The wizard now appends the
+  token to the Chatwoot inbox `webhook_url`.
+- **Tenant slug validation.** The wizard rejected invalid slugs only at the DB
+  check constraint (opaque 500); it now returns a friendly PT-BR 400 mirroring
+  `^[a-z0-9][a-z0-9-]{2,63}$`.
+
 ## [1.1.1] - 2026-06-02
 
 Swarm deploy enablement. No app behaviour change; drop-in over 1.1.0.
@@ -193,7 +208,8 @@ Tag pushed and GitHub release published 2026-05-25:
 - See `docs/release/RELEASE_NOTES.md` for the full upgrade story from 0.x and
   for the supported configuration matrix.
 
-[Unreleased]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/MadeInLowCode/chatwoot-megaapi-bridge/compare/v1.0.0...v1.0.1

@@ -316,6 +316,24 @@ func TestCheckHMAC_DecryptErrorSurfaces(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestCheckCWAuth_TokenInURL(t *testing.T) {
+	key := RandomBytes(32)
+	enc, err := Encrypt([]byte("cw-secret"), key)
+	require.NoError(t, err)
+	s := &Server{Key: key}
+	tn := Tenant{HMACSecretEnc: enc}
+
+	okReq := httptest.NewRequest(http.MethodPost, "/v1/cw/x?token=cw-secret", nil)
+	ok, err := s.checkCWAuth(okReq, tn, []byte(`{}`))
+	require.NoError(t, err)
+	require.True(t, ok, "matching ?token must authenticate")
+
+	badReq := httptest.NewRequest(http.MethodPost, "/v1/cw/x?token=wrong", nil)
+	bad, err := s.checkCWAuth(badReq, tn, []byte(`{}`))
+	require.NoError(t, err)
+	require.False(t, bad, "wrong ?token without HMAC header must fail")
+}
+
 func newBridgeWithMega(t *testing.T, host string) (*Server, Tenant) {
 	t.Helper()
 	key := RandomBytes(32)

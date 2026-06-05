@@ -234,6 +234,31 @@ func TestWizardPOSTFiresChatwootWebhookConfig(t *testing.T) {
 	require.Equal(t, "ctok", capturedCw.Token)
 }
 
+func TestWizardCWWebhookURLIncludesToken(t *testing.T) {
+	sink := &tenantSink{}
+	var capturedCw ChatwootWebhookConfig
+	cwCfg := func(_ context.Context, c ChatwootWebhookConfig) error { capturedCw = c; return nil }
+	fetch := func(_ context.Context, _ ChatwootWebhookConfig) (string, error) { return "cw-secret-xyz", nil }
+	update := func(_ context.Context, _ uuid.UUID, _ []byte) error { return nil }
+	key := bridge.RandomBytes(32)
+	store := newStore()
+	store.data[settingBaseURL] = "https://bridge.example"
+	h, err := New(Deps{
+		Key: key, InsertTenant: sink.insert, GetSetting: store.get, SetSetting: store.set,
+		ConfigWebhook:   func(_ context.Context, _ MegaAPIWebhookConfig) error { return nil },
+		ConfigCwWebhook: cwCfg, FetchCwHMAC: fetch, UpdateTenantHMAC: update,
+	})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/tenants",
+		strings.NewReader(validWizardForm().Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	require.Equal(t, http.StatusFound, rr.Code)
+	require.Equal(t, "https://bridge.example/v1/cw/acme?token=cw-secret-xyz", capturedCw.WebhookURL)
+}
+
 func TestWizardPOSTPairsHMACFromChatwoot(t *testing.T) {
 	sink := &tenantSink{}
 	megaCfg := func(_ context.Context, _ MegaAPIWebhookConfig) error { return nil }
