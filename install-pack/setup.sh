@@ -105,6 +105,30 @@ wait_service() { # wait_service <service> <timeout-s>
 }
 task_cid() { docker ps --filter "name=$1" -q | head -1; }
 
+# pcurl: roda curl num container efemero na overlay (host nao alcanca portainer:9000)
+pcurl() { docker run --rm --network "$NET" curlimages/curl:latest -s "$@"; }
+
+# ensure_portainer_env registra o ambiente swarm no Portainer via API. Necessario
+# porque o Portainer nao usa -H (evita race no boot); o ambiente e criado aqui.
+ensure_portainer_env() {
+  local i=0 jwt eps
+  while (( i < 60 )); do
+    jwt="$(pcurl --max-time 8 -X POST http://portainer:9000/api/auth -H 'Content-Type: application/json' \
+      -d "{\"username\":\"admin\",\"password\":\"$PORTAINER_PASSWORD\"}" 2>/dev/null | sed 's/.*"jwt":"//;s/".*//')"
+    [[ ${#jwt} -gt 20 ]] && break
+    sleep 3; i=$((i+3))
+  done
+  [[ ${#jwt} -gt 20 ]] || { warn "Portainer API nao respondeu; adicione o ambiente manualmente"; return; }
+  eps="$(pcurl --max-time 8 http://portainer:9000/api/endpoints -H "Authorization: Bearer $jwt" 2>/dev/null)"
+  if [[ "$eps" == "[]" ]]; then
+    log "registrando ambiente swarm no Portainer"
+    pcurl --max-time 15 -X POST http://portainer:9000/api/endpoints -H "Authorization: Bearer $jwt" \
+      -F "Name=swarm-local" -F "EndpointCreationType=2" -F "URL=tcp://tasks.agent:9001" \
+      -F "TLS=true" -F "TLSSkipVerify=true" -F "TLSSkipClientVerify=true" >/dev/null 2>&1 \
+      && log "ambiente Portainer OK" || warn "falha ao registrar ambiente Portainer (adicione manual)"
+  fi
+}
+
 main() {
   [[ "$(id -u)" == "0" ]] || warn "rodando sem root — instalacao de docker pode falhar"
   ensure_docker; ensure_swarm; ensure_network
@@ -134,6 +158,8 @@ main() {
     log "preparando banco do Chatwoot (db:chatwoot_prepare)"
     docker exec "$cw" bundle exec rails db:chatwoot_prepare || warn "db:chatwoot_prepare falhou — rode manualmente"
   fi
+
+  log "registrando ambiente no Portainer..."; ensure_portainer_env
 
   log "esperando bridge..."; wait_service bridge_bridge 120
   local br; br="$(task_cid bridge_bridge)"

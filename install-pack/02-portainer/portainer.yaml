@@ -27,7 +27,10 @@ services:
     # --admin-password-file pre-cria o usuario admin no 1o boot (acaba o
     # timeout de 5 min). A senha (texto puro) vem do docker secret criado
     # pelo setup.sh. Username = admin.
-    command: -H tcp://tasks.agent:9001 --tlsskipverify --admin-password-file /run/secrets/portainer_admin_password
+    # NAO usamos -H aqui: conectar no agent no boot causa race (FTL se o agent
+    # ainda nao subiu) e o ambiente nao chega a ser registrado. O setup.sh
+    # registra o ambiente swarm via API depois, de forma deterministica.
+    command: --admin-password-file /run/secrets/portainer_admin_password
     volumes:
       - portainer_data:/data
     networks:
