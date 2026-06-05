@@ -306,7 +306,7 @@ func TestWizardPOSTPairsHMACFromChatwoot(t *testing.T) {
 	require.Equal(t, "chatwoot-hmac-secret", string(dec))
 }
 
-func TestWizardPOSTPairHMACFailureDoesNotBlockTenant(t *testing.T) {
+func TestWizardPOSTBlocksWhenInboxFetchFails(t *testing.T) {
 	sink := &tenantSink{}
 	megaCfg := func(_ context.Context, _ MegaAPIWebhookConfig) error { return nil }
 	cwCfg := func(_ context.Context, _ ChatwootWebhookConfig) error { return nil }
@@ -333,21 +333,17 @@ func TestWizardPOSTPairHMACFailureDoesNotBlockTenant(t *testing.T) {
 	req.AddCookie(authCookie(t, h, "a@b"))
 	rr := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rr, req)
-	require.Equal(t, http.StatusFound, rr.Code)
-	require.False(t, updateCalled, "update must not be called when fetch fails")
+	require.Equal(t, http.StatusBadRequest, rr.Code, "inbox fetch failure must block tenant creation")
+	require.Equal(t, uuid.Nil, sink.id, "tenant must not be inserted when inbox fetch fails")
+	require.False(t, updateCalled)
 }
 
-func TestWizardPOSTPairHMACEmptyTokenSkipsUpdate(t *testing.T) {
+func TestWizardPOSTBlocksWhenInboxSecretEmpty(t *testing.T) {
 	sink := &tenantSink{}
 	megaCfg := func(_ context.Context, _ MegaAPIWebhookConfig) error { return nil }
 	cwCfg := func(_ context.Context, _ ChatwootWebhookConfig) error { return nil }
 	fetch := func(_ context.Context, _ ChatwootWebhookConfig) (string, error) {
 		return "", nil
-	}
-	updateCalled := false
-	update := func(_ context.Context, _ uuid.UUID, _ []byte) error {
-		updateCalled = true
-		return nil
 	}
 	key := bridge.RandomBytes(32)
 	store := newStore()
@@ -355,7 +351,7 @@ func TestWizardPOSTPairHMACEmptyTokenSkipsUpdate(t *testing.T) {
 	h, err := New(Deps{
 		Key: key, InsertTenant: sink.insert, GetSetting: store.get, SetSetting: store.set,
 		ConfigWebhook: megaCfg, ConfigCwWebhook: cwCfg,
-		FetchCwHMAC: fetch, UpdateTenantHMAC: update,
+		FetchCwHMAC: fetch, UpdateTenantHMAC: func(_ context.Context, _ uuid.UUID, _ []byte) error { return nil },
 	})
 	require.NoError(t, err)
 	req := httptest.NewRequest(http.MethodPost, "/tenants",
@@ -364,8 +360,8 @@ func TestWizardPOSTPairHMACEmptyTokenSkipsUpdate(t *testing.T) {
 	req.AddCookie(authCookie(t, h, "a@b"))
 	rr := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rr, req)
-	require.Equal(t, http.StatusFound, rr.Code)
-	require.False(t, updateCalled)
+	require.Equal(t, http.StatusBadRequest, rr.Code, "empty inbox secret must block tenant creation")
+	require.Equal(t, uuid.Nil, sink.id, "tenant must not be inserted when inbox secret is empty")
 }
 
 func TestWizardPOSTDuplicateSlugReturnsFriendlyConflict(t *testing.T) {

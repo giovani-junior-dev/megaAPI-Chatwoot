@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/madeinlowcode/chatwoot-megaapi-bridge/internal/bridge"
@@ -45,6 +43,21 @@ func (h *Handler) handleTenantCreate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Valida a inbox do Chatwoot e obtem o secret ANTES de criar o tenant, para
+	// nao deixar um tenant meio-configurado (o outbound falharia em silencio se
+	// a inbox nao existir no momento da criacao).
+	cwSecret := ""
+	if h.deps.FetchCwHMAC != nil {
+		s, ferr := h.deps.FetchCwHMAC(r.Context(), ChatwootWebhookConfig{
+			BaseURL: spec.ChatwootURL, Token: spec.ChatwootToken,
+			AccountID: spec.ChatwootAccountID, InboxID: spec.ChatwootInboxID,
+		})
+		if ferr != nil || s == "" {
+			http.Error(w, "Não foi possível acessar a inbox do Chatwoot. Crie a inbox do tipo API primeiro e confira Account ID, Inbox ID e o token de acesso.", http.StatusBadRequest)
+			return
+		}
+		cwSecret = s
+	}
 	bearer, _, ti, err := bridge.BuildTenantInsert(h.deps.Key, spec)
 	if err != nil {
 		http.Error(w, "crypto error", http.StatusInternalServerError)
@@ -59,32 +72,14 @@ func (h *Handler) handleTenantCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "erro ao salvar tenant", http.StatusInternalServerError)
 		return
 	}
+	if cwSecret != "" && h.deps.UpdateTenantHMAC != nil {
+		if enc, encErr := bridge.Encrypt([]byte(cwSecret), h.deps.Key); encErr == nil {
+			_ = h.deps.UpdateTenantHMAC(r.Context(), id, enc)
+		}
+	}
 	h.fireMegaAPIConfig(r, spec, bearer)
-	cwToken := h.pairChatwootHMAC(r.Context(), spec, id)
-	h.fireChatwootConfig(r, spec, cwToken)
+	h.fireChatwootConfig(r, spec, cwSecret)
 	http.Redirect(w, r, "/", http.StatusFound)
-}
-
-// pairChatwootHMAC fetches the Chatwoot inbox secret, persists it as the tenant
-// secret, and returns it (plaintext) so the caller can embed it as the ?token
-// on the inbox webhook_url. Returns "" when no secret is available.
-func (h *Handler) pairChatwootHMAC(ctx context.Context, spec bridge.TenantSpec, id uuid.UUID) string {
-	if h.deps.FetchCwHMAC == nil || h.deps.UpdateTenantHMAC == nil {
-		return ""
-	}
-	token, err := h.deps.FetchCwHMAC(ctx, ChatwootWebhookConfig{
-		BaseURL: spec.ChatwootURL, Token: spec.ChatwootToken,
-		AccountID: spec.ChatwootAccountID, InboxID: spec.ChatwootInboxID,
-	})
-	if err != nil || token == "" {
-		return ""
-	}
-	enc, err := bridge.Encrypt([]byte(token), h.deps.Key)
-	if err != nil {
-		return ""
-	}
-	_ = h.deps.UpdateTenantHMAC(ctx, id, enc)
-	return token
 }
 
 func (h *Handler) fireChatwootConfig(r *http.Request, spec bridge.TenantSpec, token string) {
