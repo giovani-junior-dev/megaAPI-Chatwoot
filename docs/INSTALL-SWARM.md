@@ -11,7 +11,7 @@ self-provisions its database on first boot and ingresses through Cloudflare.
   docker network create --driver overlay --attachable network_swarm_public
   ```
 - A Postgres service reachable as `postgres:5432` on that network.
-- The published image `ghcr.io/giovani-junior-dev/chatwoot-megaapi-bridge:v1.1.1`
+- The published image `ghcr.io/giovani-junior-dev/chatwoot-megaapi-bridge:v1.1.2`
   (produced by the `publish-image` workflow on every `v*` tag).
 
 ## 1. Secrets / environment
