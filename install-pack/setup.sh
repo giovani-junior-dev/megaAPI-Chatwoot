@@ -124,14 +124,21 @@ portainer_ctx() {
     sleep 3; i=$((i+3))
   done
   [[ ${#PJWT} -gt 20 ]] || { warn "Portainer API indisponivel; usando deploy via CLI (stacks ficam 'Limited')"; return; }
-  local eps; eps="$(pcurl --max-time 8 http://portainer:9000/api/endpoints -H "Authorization: Bearer $PJWT" 2>/dev/null)"
-  if [[ "$eps" == "[]" ]]; then
-    log "registrando ambiente swarm no Portainer"
+  # Registra o ambiente com RETRY: criar um endpoint tipo-agent valida a conexao
+  # com tasks.agent:9001; se o agent ainda nao subiu, a criacao falha e o
+  # endpoint nao aparece. Repetimos ate o agent responder (~2min) para nao cair
+  # no fallback CLI (stacks ficariam 'Limited').
+  log "registrando ambiente swarm no Portainer (aguardando agent)"
+  local j=0 eps="[]"
+  while (( j < 120 )); do
+    eps="$(pcurl --max-time 8 http://portainer:9000/api/endpoints -H "Authorization: Bearer $PJWT" 2>/dev/null)"
+    [[ -n "$eps" && "$eps" != "[]" ]] && break
     pcurl --max-time 15 -X POST http://portainer:9000/api/endpoints -H "Authorization: Bearer $PJWT" \
       -F "Name=swarm-local" -F "EndpointCreationType=2" -F "URL=tcp://tasks.agent:9001" \
       -F "TLS=true" -F "TLSSkipVerify=true" -F "TLSSkipClientVerify=true" >/dev/null 2>&1 || true
-  fi
-  PEID="$(pcurl --max-time 8 http://portainer:9000/api/endpoints -H "Authorization: Bearer $PJWT" 2>/dev/null | sed 's/.*"Id"://;s/[^0-9].*//' )"
+    sleep 4; j=$((j+4))
+  done
+  PEID="$(echo "$eps" | sed 's/.*"Id"://;s/[^0-9].*//')"
   PSWARM="$(pcurl --max-time 8 "http://portainer:9000/api/endpoints/$PEID/docker/swarm" -H "Authorization: Bearer $PJWT" 2>/dev/null | sed 's/.*"ID":"//;s/".*//')"
   # monta o array de env (todas as vars do .env) para o Portainer interpolar ${VAR}
   PENV="$(python3 - "$ENV_FILE" <<'PY'
