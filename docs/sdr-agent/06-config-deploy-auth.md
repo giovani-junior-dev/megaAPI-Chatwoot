@@ -70,17 +70,17 @@ env/secret manager. Espelhar o padrão de cifra do bridge se rodar junto.
 ## Estrutura do repo (separado)
 
 ```
-chatwoot-sdr-agent/
+chatwoot-sdr-agent/            # NestJS
   src/
-    webhook/        # Fastify receiver + filtro/anti-loop/dedupe
+    webhook/        # controller outgoing_url + filtro/anti-loop/dedupe
     orchestrator/   # monta contexto, roda loop, serializa por conversa
-    agent/          # Claude Agent SDK config + tools + playbook builder
+    agent/          # Claude Agent SDK config + tools + system-prompt(AGENT.md)
     chatwoot/       # client REST
     kb/             # loader markdown + consultar_kb
     memory/         # wrapper ai-memory MCP
     summarizer/     # resumo + gaps
     config/         # loader + schema
-  config/<empresa>/ # config + kb/*.md  (ou fora do repo, secret-managed)
+  config/<empresa>/ # AGENT.md (personalidade) + kb/*.md  (replicar = copiar+editar)
   test/
 ```
 

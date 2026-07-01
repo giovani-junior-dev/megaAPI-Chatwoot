@@ -30,9 +30,11 @@ Nota: `responder` pode ser implícito (o texto final do turno vira a resposta) O
 explícito como tool. Definir na implementação — tool explícita dá mais controle
 sobre quando/se responder (ex: escalar sem responder). Ver Q4.
 
-## Playbook (system prompt) — estrutura
+## Playbook (system prompt) = arquivo `AGENT.md`
 
-Montado da config da empresa. Seções:
+A personalidade + playbook vivem num arquivo **`AGENT.md`** por agente (estilo
+CLAUDE.md), versionado. Vira o system prompt. **Replicar agente = copiar `AGENT.md`
++ `kb/` e editar a personalidade.** Seções do `AGENT.md`:
 
 1. **Identidade & tom** — quem é o agente, tom de voz, idioma (PT-BR), limites
    ("nunca invente preço/prazo; se não sabe, escale").

@@ -21,6 +21,10 @@ já em produção — **zero mudança no bridge**.
 | [07-testing](07-testing.md) | Unit, integração, E2E, guards críticos |
 | [08-phase-2-followup](08-phase-2-followup.md) | Follow-up proativo, loop melhoria, constraint 24h |
 | [09-open-questions-for-review](09-open-questions-for-review.md) | Pendências a resolver na revisão |
+| [10-whatsapp-swap-and-transport](10-whatsapp-swap-and-transport.md) | **D10/D11** — Chatwoot como camada de troca de core; sem WhatsApp no agente |
+| [sdr-agent-fase1-plan.html](sdr-agent-fase1-plan.html) | **Plano de implementação** (planf3 + code-craftsman): fases, EARS, TDD, matriz de testes |
+
+> **Backend: NestJS** · **Personalidade: `AGENT.md` (estilo CLAUDE.md) + `kb/` por agente, replicável por cópia** (decisões rodada 2).
 
 ## Resumo em 1 parágrafo
 

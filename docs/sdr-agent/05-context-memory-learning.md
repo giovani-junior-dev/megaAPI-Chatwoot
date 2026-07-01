@@ -6,8 +6,9 @@ Três stores distintos, cada um 1 propósito. Não misturar.
 
 - **O quê**: produto, empresa, FAQ, playbook/script, políticas (troca, prazo,
   preço), regras de escalação, temas sensíveis, sinais de lead quente.
-- **Formato**: **markdown versionado** na config da empresa (ex:
-  `config/<empresa>/kb/*.md`).
+- **Formato**: **markdown versionado** na config da empresa:
+  `config/<empresa>/AGENT.md` (personalidade/playbook, estilo CLAUDE.md) +
+  `config/<empresa>/kb/*.md` (contexto). Replicar agente = copiar a pasta + editar.
 - **Como o agente usa**:
   - KB pequena → embutida no system prompt.
   - KB maior → tool `consultar_kb(query)` sob demanda.

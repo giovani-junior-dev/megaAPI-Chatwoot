@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: SDR Agent — Fase 1</title>
+<style>
+:root{
+  --bg:#0e1621; --panel:#16212e; --ink:#e6edf3; --muted:#9fb0c0;
+  --cw-blue:#1f93ff; --mega-green:#25d366; --line:#243447;
+  --warn:#f2b34b; --bad:#ef5a5a; --ok:#3fb950;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:Inter,system-ui,Segoe UI,Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5}
+main{max-width:1000px;margin:0 auto;padding:32px 24px}
+h1{font-size:26px;border-bottom:2px solid var(--cw-blue);padding-bottom:8px}
+h2{font-size:20px;margin-top:36px;color:var(--cw-blue)}
+h3{font-size:16px;margin-top:22px}
+h4{font-size:14px;color:var(--mega-green);margin:16px 0 6px}
+p{color:var(--ink)}
+code{font-family:var(--mono);font-size:12.5px;background:#0b1119;padding:1px 5px;border-radius:4px;color:#cbd5e1}
+pre{background:#0b1119;border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13px}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--panel);color:var(--cw-blue)}
+.meta dl{display:grid;grid-template-columns:120px 1fr;gap:2px 10px;font-size:12px;color:var(--muted)}
+.meta dt{color:var(--cw-blue)}
+.tag{font-size:10px;padding:1px 6px;border-radius:10px;font-family:var(--mono)}
+.tag.existing{background:#20303f;color:var(--muted)}
+.tag.new{background:#123020;color:var(--mega-green)}
+.phase{border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:16px 0;background:var(--panel)}
+.checklist{list-style:none;padding-left:0}
+.checklist li{padding:3px 0;font-size:13px}
+.status{color:var(--warn)}
+.loop{background:#1a2430;border-left:3px solid var(--mega-green);padding:8px 12px;margin-top:10px;font-size:12.5px;border-radius:4px}
+figure{margin:14px 0;text-align:center}
+figcaption{font-size:11px;color:var(--muted)}
+details{margin:8px 0}
+summary{cursor:pointer;color:var(--cw-blue);font-size:13px}
+.qa-answer{font-size:13px;color:var(--muted)}
+.yagni{color:var(--bad)}
+section{border-top:1px solid var(--line);padding-top:6px}
+</style>
+</head>
+<body>
+<main>
+
+  <header>
+    <h1>Plan: SDR Agent — Fase 1 (Chatwoot AgentBot + Claude Agent SDK)</h1>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-07-01</dd>
+        <dt>modified</dt>     <dd>2026-07-01</dd>
+        <dt>commits</dt>      <dd>—</dd>
+        <dt>agent name</dt>   <dd>claude-opus-4-8</dd>
+        <dt>session id</dt>   <dd>c039de19</dd>
+        <dt>back refs</dt>    <dd>docs/sdr-agent/README.md, ~/.claude/plans/vamos-criar-agora-um-misty-clarke.md</dd>
+        <dt>forward refs</dt> <dd>—</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <!-- {{HERO_IMAGE: agente IA no meio, WhatsApp de um lado, Chatwoot do outro, seta de handoff pra humano}} (imagem adiada — doc de revisão) -->
+    <figcaption>Fluxo: cliente WhatsApp ⇄ Chatwoot ⇄ SDR Agent ⇄ handoff humano</figcaption>
+  </figure>
+
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>Plano de implementação da <strong>Fase 1</strong> do SDR Agent: atender inbound WhatsApp
+    ponta-a-ponta via Chatwoot AgentBot (resolve rotina + qualifica lead + escala com contexto +
+    fecha + resume). Single-tenant instance-per-company. NestJS + Claude Agent SDK (TS). Lente
+    code-craftsman: flat, YAGNI, TDD-first, sem WhatsApp no agente.</p>
+  </section>
+
+  <section id="problem">
+    <h2>Problem</h2>
+    <p>Giovani atende sozinho, não escala. Cada minuto no Chatwoot é minuto fora do negócio.
+    Precisa de atendimento automático de qualidade que escale pra humano só quando faltar contexto.</p>
+    <figure>
+      <!-- {{PROBLEM_IMAGE: fila de mensagens WhatsApp acumulando, 1 pessoa sobrecarregada}} (adiada) -->
+      <figcaption>Gargalo: 1 operador, N conversas simultâneas</figcaption>
+    </figure>
+  </section>
+
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>AgentBot no inbox WhatsApp. Msg do cliente → webhook → NestJS monta contexto
+    (AGENT.md + KB + memória ai-memory + histórico) → loop Claude Agent SDK com tools Chatwoot →
+    responde / escala / fecha. Entrega sai pela camada Chatwoot (bridge→megaAPI). Agente
+    <strong>nunca toca WhatsApp</strong> → troca de core (megaAPI↔oficial) é embaixo dele, sem reescrita.</p>
+    <figure>
+      <!-- {{SOLUTION_IMAGE: NestJS box com módulos webhook/agent/chatwoot/kb/memory, MCP ai-memory ligado}} (adiada) -->
+      <figcaption>NestJS: módulos webhook · orchestrator · agent · chatwoot · kb · memory · summarizer</figcaption>
+    </figure>
+  </section>
+
+  <section id="reqs">
+    <h2>Requisitos (EARS)</h2>
+    <table>
+      <tr><th>ID</th><th>Padrão</th><th>Requisito</th></tr>
+      <tr><td>REQ-1</td><td>event</td><td>When msg do cliente chega (message_created, incoming, não-privado) no outgoing_url, the agente shall montar contexto e gerar resposta ou escalação na conversa.</td></tr>
+      <tr><td>REQ-2</td><td>unwanted</td><td>If o evento é mensagem outgoing/do próprio bot, then the receiver shall descartar (anti-loop).</td></tr>
+      <tr><td>REQ-3</td><td>unwanted</td><td>If message.id já processado, then the receiver shall descartar duplicata (idempotência).</td></tr>
+      <tr><td>REQ-4</td><td>state</td><td>While uma conversa está em processamento, the orchestrator shall serializar novas msgs dessa conversa (sem resposta dupla).</td></tr>
+      <tr><td>REQ-5</td><td>event</td><td>When falta contexto KB / tema sensível / pedido humano / lead quente / N turnos, the agente shall escalar (status open + assign + label + nota com motivo).</td></tr>
+      <tr><td>REQ-6</td><td>event</td><td>When o agente resolve, the agente shall fechar (status resolved) e gravar resumo+gaps no ai-memory.</td></tr>
+      <tr><td>REQ-7</td><td>unwanted</td><td>If o agente erra/timeout/rate-limit, then the system shall escalar pra humano com nota "falha técnica" (fail-safe, sem silêncio).</td></tr>
+      <tr><td>REQ-8</td><td>ubiquitous</td><td>The system shall nunca enviar WhatsApp direto; entrega só via mensagem outgoing no Chatwoot.</td></tr>
+      <tr><td>REQ-9</td><td>state</td><td>While atende um contato, the agente shall carregar e atualizar a página de memória do contato no ai-memory.</td></tr>
+    </table>
+  </section>
+
+  <section id="stack">
+    <h2>Stack</h2>
+    <table>
+      <tr><th>Pkg</th><th>Uso</th><th>Motivo (1 linha)</th></tr>
+      <tr><td>NestJS 10</td><td>backend</td><td>módulos+DI, esqueleto pro crescimento (UI/multi-agente)</td></tr>
+      <tr><td>@anthropic-ai/claude-agent-sdk</td><td>loop agente</td><td>reusa OAuth Pro Max; MCP nativo; custom tools</td></tr>
+      <tr><td>Vitest</td><td>unit</td><td>rápido, TDD red-green</td></tr>
+      <tr><td>MSW + zod</td><td>contract</td><td>valida contrato HTTP Chatwoot</td></tr>
+      <tr><td>Stryker</td><td>mutation</td><td>≥70% score na lógica core</td></tr>
+      <tr><td>Biome</td><td>lint/format</td><td>zero-config, rápido</td></tr>
+      <tr><td>pino</td><td>logs</td><td>estruturado, sem vazar segredo</td></tr>
+      <tr><td>ai-memory (MCP)</td><td>memória</td><td>já no ecossistema; MCP-nativo</td></tr>
+      <tr><td>Docker</td><td>deploy</td><td>1 container por empresa</td></tr>
+    </table>
+  </section>
+
+  <section id="arch">
+    <h2>Arquitetura</h2>
+<pre><code>src/
+  config/        # loader + schema (company config, AGENT.md path, creds)
+  webhook/       # controller outgoing_url: filtro + anti-loop + dedupe + enqueue
+  orchestrator/  # monta contexto, roda agente, serializa por conversa
+  agent/         # Claude Agent SDK setup + tools + system-prompt(AGENT.md)
+  chatwoot/      # client REST (única superfície HTTP→Chatwoot)
+  kb/            # loader markdown + consultar_kb (busca textual, sem vetor)
+  memory/        # wrapper ai-memory MCP
+  summarizer/    # resumo + gaps ao resolver
+config/&lt;empresa&gt;/
+  AGENT.md       # personalidade+playbook (estilo CLAUDE.md)
+  kb/*.md        # contexto curado
+test/</code></pre>
+    <p><strong>Regras de fronteira:</strong></p>
+    <table>
+      <tr><th>#</th><th>Regra</th></tr>
+      <tr><td>1</td><td>Módulos não importam internals de outro módulo (SRP por pasta).</td></tr>
+      <tr><td>2</td><td><code>chatwoot/</code> é a ÚNICA superfície HTTP→Chatwoot. Tools chamam o client, não fetch cru.</td></tr>
+      <tr><td>3</td><td>Zero código WhatsApp/megaAPI/wablast em qualquer lugar (D10).</td></tr>
+      <tr><td>4</td><td>Sem interface sem 2ª impl. 1 Chatwoot client concreto, sem <code>IChatwoot</code>.</td></tr>
+      <tr><td>5</td><td>Sem UseCase/Port/Adapter/Mapper. Flat: input→lógica→efeito.</td></tr>
+    </table>
+  </section>
+
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+    <h3>Existing Files (referência, não editar)</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>internal/bridge/server.go</code> — padrão webhook/filtro/dedupe do bridge (espelhar conceito)</li>
+      <li><span class="tag existing">existing</span> <code>scripts/e2e-test.sh</code> — padrão de teste E2E a espelhar</li>
+      <li><span class="tag existing">existing</span> <code>docs/sdr-agent/*.md</code> — design (fonte deste plano)</li>
+    </ul>
+    <h3>New Files (repo separado <code>chatwoot-sdr-agent</code>)</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>src/config/company-config.ts</code> — schema+loader (zod)</li>
+      <li><span class="tag new">new</span> <code>src/chatwoot/chatwoot.client.ts</code> — REST wrapper</li>
+      <li><span class="tag new">new</span> <code>src/webhook/agentbot.controller.ts</code> — recebe evento, filtra, enfileira</li>
+      <li><span class="tag new">new</span> <code>src/webhook/message-filter.ts</code> — anti-loop + dedupe (guard crítico)</li>
+      <li><span class="tag new">new</span> <code>src/orchestrator/conversation.orchestrator.ts</code> — contexto + serialização</li>
+      <li><span class="tag new">new</span> <code>src/agent/agent.runner.ts</code> — Claude Agent SDK + tools</li>
+      <li><span class="tag new">new</span> <code>src/agent/tools/*.ts</code> — responder/escalar/fechar/label/nota/consultar_kb</li>
+      <li><span class="tag new">new</span> <code>src/kb/kb.loader.ts</code> — AGENT.md + kb/ + busca textual</li>
+      <li><span class="tag new">new</span> <code>src/memory/aimemory.client.ts</code> — MCP wrapper</li>
+      <li><span class="tag new">new</span> <code>src/summarizer/summarizer.ts</code> — resumo+gaps</li>
+    </ul>
+  </section>
+
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Executar toda fase e task em ordem, topo→base. TDD RED-first
+    obrigatório em cada task de lógica. Status: <code>[]</code> idle · <code>[wip]</code> · <code>[x]</code> · <code>[f]</code>.</p>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 0: Scaffold + guardrails</h3>
+      <p>NestJS + toolchain de qualidade. Sem lógica de negócio.</p>
+      <h4>0.1 Bootstrap</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Init NestJS + tsconfig strict + Biome + Vitest + Stryker</li>
+        <li><code class="status">[]</code> Módulos vazios (pastas da árvore) + healthz</li>
+        <li><code class="status">[]</code> pino logger; env via ConfigModule</li>
+      </ul>
+      <h4>0.2 Config loader (TDD)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: teste schema zod (campo faltando → erro claro; segredo não logado)</li>
+        <li><code class="status">[]</code> GREEN: <code>company-config.ts</code> parse+validate</li>
+      </ul>
+      <h4>0.3 Testing Strategy</h4>
+      <p>Vitest unit no config loader. Sem HTTP ainda.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>pnpm test</code> — config loader verde</li>
+        <li><code class="status">[]</code> <code>pnpm lint && pnpm typecheck</code> — zero</li>
+      </ul>
+      <div class="loop">🔁 Não sair sem tudo verde.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 1: Chatwoot client (contract-tested)</h3>
+      <p>Única superfície HTTP→Chatwoot. Token do bot.</p>
+      <h4>1.1 Métodos (TDD + contract)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: contract test (MSW+zod) p/ postMessage(outgoing/private), setStatus, assign, setLabels, listMessages</li>
+        <li><code class="status">[]</code> GREEN: <code>chatwoot.client.ts</code> (auth <code>api_access_token</code>=bot token)</li>
+        <li><code class="status">[]</code> Erro 422 duplicado/401 mapeado (não vaza SQL/stack)</li>
+      </ul>
+      <h4>1.2 Testing Strategy</h4>
+      <p>Contract (MSW) cobre shapes reais. Sem E2E aqui.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>pnpm test chatwoot</code> — contratos verdes</li>
+        <li><code class="status">[]</code> <code>pnpm mutation -- chatwoot</code> — ≥70%</li>
+      </ul>
+      <div class="loop">🔁 Loop até verde.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 2: Webhook receiver + guards críticos</h3>
+      <p>REQ-1/2/3. Responde 200 rápido, enfileira.</p>
+      <h4>2.1 Filtro + anti-loop + dedupe (TDD)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: aceita incoming+não-privado; <strong>rejeita outgoing/próprio bot</strong>; rejeita private; dedupe por message.id</li>
+        <li><code class="status">[]</code> RED: valida assinatura/secret; inválido → 401</li>
+        <li><code class="status">[]</code> GREEN: <code>message-filter.ts</code> + <code>agentbot.controller.ts</code></li>
+      </ul>
+      <h4>2.2 Testing Strategy</h4>
+      <p>Unit nos guards (o mais crítico do projeto — falha = flood no cliente).</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>pnpm test webhook</code> — guards verdes</li>
+        <li><code class="status">[]</code> <code>pnpm mutation -- webhook</code> — ≥70% (guard não pode ter mutante vivo)</li>
+      </ul>
+      <div class="loop">🔁 Guard anti-loop DEVE ter teste explícito passando.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 3: KB + AGENT.md loader</h3>
+      <p>Personalidade file-based + contexto. Busca textual simples (sem vetor — YAGNI).</p>
+      <h4>3.1 Loader (TDD)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: carrega AGENT.md → system prompt; kb/ vazia não quebra; consultar_kb retorna trecho</li>
+        <li><code class="status">[]</code> GREEN: <code>kb.loader.ts</code></li>
+        <li><code class="status">[]</code> Snapshot: AGENT.md → system-prompt montado (output gerado)</li>
+      </ul>
+      <h4>3.2 Testing Strategy</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>pnpm test kb</code> — loader + snapshot verdes</li>
+      </ul>
+      <div class="loop">🔁 Loop até verde.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 4: Agent core + tools</h3>
+      <p>Claude Agent SDK custom-tools-only. Tools mapeiam pro Chatwoot client / KB.</p>
+      <h4>4.1 Tools (TDD, Chatwoot client mockado)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: escalar_humano chama status+assign+label+nota <strong>com motivo</strong> (REQ-5)</li>
+        <li><code class="status">[]</code> RED: fechar_conversa → resolved + dispara summarizer (REQ-6)</li>
+        <li><code class="status">[]</code> RED: responder/add_label/add_nota_privada/consultar_kb</li>
+        <li><code class="status">[]</code> GREEN: <code>tools/*.ts</code></li>
+      </ul>
+      <h4>4.2 Runner</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Configura SDK: desliga read/bash/edit/write; system prompt=AGENT.md; MCP=ai-memory</li>
+        <li><code class="status">[]</code> Fail-safe: erro/timeout/rate-limit → escala (REQ-7)</li>
+      </ul>
+      <h4>4.3 Testing Strategy</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>pnpm test agent</code> — handlers verdes</li>
+        <li><code class="status">[]</code> <code>pnpm mutation -- agent</code> — ≥70%</li>
+      </ul>
+      <div class="loop">🔁 Loop até verde.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 5: Orchestrator</h3>
+      <p>REQ-4. Monta contexto, roda agente, serializa por conversa (Map em memória — sem Redis/Bull, YAGNI).</p>
+      <h4>5.1 Fluxo (TDD)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: monta contexto (config+KB+memória+histórico); executa tool-calls</li>
+        <li><code class="status">[]</code> RED: 2 msgs rápidas mesma conversa → 1 resposta (serialização)</li>
+        <li><code class="status">[]</code> GREEN: <code>conversation.orchestrator.ts</code></li>
+      </ul>
+      <h4>5.2 Testing Strategy</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>pnpm test orchestrator</code> — verde + teste de concorrência</li>
+      </ul>
+      <div class="loop">🔁 Loop até verde.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 6: Memory + Summarizer</h3>
+      <p>REQ-9 + captura de learning (só captura na Fase 1).</p>
+      <h4>6.1 (TDD, MCP mockado)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: carrega/atualiza página do contato; summarizer gera resumo+gap ao resolver</li>
+        <li><code class="status">[]</code> GREEN: <code>aimemory.client.ts</code> + <code>summarizer.ts</code></li>
+      </ul>
+      <h4>6.2 Testing Strategy</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>pnpm test memory summarizer</code> — verde</li>
+      </ul>
+      <div class="loop">🔁 Loop até verde.</div>
+    </div>
+
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 7: Wiring + provisionamento + E2E</h3>
+      <p>Compõe o fluxo real. Provisiona AgentBot. Docker. E2E contra Chatwoot de teste + bridge.</p>
+      <h4>7.1 Integração</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Script/manual: cria AgentBot + set_agent_bot no inbox de teste (guarda token)</li>
+        <li><code class="status">[]</code> Dockerfile + healthz + config por env + kb/ volume</li>
+        <li><code class="status">[]</code> Validar Q1/Q2/Q3 na instância real (payload, hooks, status inicial)</li>
+      </ul>
+      <h4>7.2 Testing Strategy (E2E opt-in)</h4>
+      <p>Backend/webhook → contract+unit cobrem. E2E = script de integração (não Playwright).</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> Integração: WhatsApp teste → responde/escala/fecha/resume (assert no Chatwoot + ai-memory)</li>
+        <li><code class="status">[]</code> Guard E2E: agente NÃO responde à própria mensagem (flood)</li>
+        <li><code class="status">[]</code> <code>/code-craftsman:e2e-decide sdr-fase1</code> — registrar ADR</li>
+      </ul>
+      <div class="loop">🔁 Loop até fluxo real verde.</div>
+    </div>
+  </section>
+
+  <section id="tests">
+    <h2>Matriz de Testes</h2>
+    <table>
+      <tr><th>Tipo</th><th>Tool</th><th>Escopo</th><th>Alvo</th></tr>
+      <tr><td>Unit (RED-first)</td><td>Vitest</td><td>config, filtro, tools, orchestrator, kb, summarizer</td><td>≥80% novo código</td></tr>
+      <tr><td>Contract</td><td>MSW+zod</td><td>Chatwoot client (HTTP externo)</td><td>shapes reais</td></tr>
+      <tr><td>Snapshot</td><td>Vitest</td><td>AGENT.md→system prompt (output gerado)</td><td>≤50 linhas</td></tr>
+      <tr><td>Mutation</td><td>Stryker</td><td>filtro (guard), chatwoot, agent, orchestrator</td><td>≥70%</td></tr>
+      <tr><td>Integração/E2E</td><td>script</td><td>fluxo real Chatwoot+bridge</td><td>opt-in ADR</td></tr>
+    </table>
+  </section>
+
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>pnpm lint</code> — zero violações (Biome)</li>
+      <li><code class="status">[]</code> <code>pnpm typecheck</code> — zero erros</li>
+      <li><code class="status">[]</code> <code>pnpm test</code> — todas unit/contract/snapshot verdes</li>
+      <li><code class="status">[]</code> <code>pnpm test:cov</code> — novo código ≥80%</li>
+      <li><code class="status">[]</code> <code>pnpm mutation</code> — score ≥70%</li>
+      <li><code class="status">[]</code> Guard anti-loop: teste explícito passando</li>
+    </ul>
+    <div class="loop">🔁 Plano não completo até tudo verde. Impossível → marca [f] e segue.</div>
+  </section>
+
+  <section id="questionables">
+    <h2>Questionables</h2>
+    <figure>
+      <!-- {{QUESTIONABLES_IMAGE: lista de perguntas abertas sobre uma mesa}} (adiada) -->
+      <figcaption>Pendências a resolver na instância real (ver 09-open-questions)</figcaption>
+    </figure>
+    <details><summary>Q1: os 2 hooks (canal bridge + agentbot) disparam juntos? shape do payload?</summary>
+      <p class="qa-answer">Assumido SIM (hooks distintos). Validar capturando evento real na instância self-hosted. Bloqueia Phase 2/7.</p></details>
+    <details><summary>Q2: status inicial da conversa nova em inbox com AgentBot?</summary>
+      <p class="qa-answer">Assumido: pode começar pending (bot dono). Confirmar; bot seta pending explícito se preciso.</p></details>
+    <details><summary>Q3: criar bot via Application API ou Platform API na self-hosted?</summary>
+      <p class="qa-answer">Assumido Application (<code>/api/v1/accounts/{id}/agent_bots</code>). Validar; muda provisionamento (Phase 7).</p></details>
+    <details><summary>Q4: responder é tool explícita ou texto final do turno?</summary>
+      <p class="qa-answer">Recomendado tool explícita (permite escalar sem responder). Fixar em Phase 4.</p></details>
+    <details><summary>Q5: LGPD — o que a memória do contato pode guardar?</summary>
+      <p class="qa-answer">Definir retenção + campos proibidos antes do summarizer (Phase 6).</p></details>
+    <details><summary>Q11: qual empresa piloto (define AGENT.md + kb/ de teste)?</summary>
+      <p class="qa-answer">Giovani atende produto próprio. Assumir esse como piloto; montar AGENT.md real.</p></details>
+  </section>
+
+  <section id="notes">
+    <h2>Notes</h2>
+    <h3>Anti-exagero (code-craftsman) — o que NÃO construir</h3>
+    <table>
+      <tr><th>Decisão</th><th>Motivo</th><th>Rejeitado</th></tr>
+      <tr><td>Sem abstração WhatsApp no agente (D10)</td><td>Chatwoot já é a camada; troca embaixo</td><td>WhatsAppGateway/adapters no agente</td></tr>
+      <tr><td>1 Chatwoot client concreto</td><td>1 impl só</td><td>IChatwoot + DI ritual</td></tr>
+      <tr><td>Busca textual na KB</td><td>KB pequena cabe</td><td>RAG/vetor/embeddings</td></tr>
+      <tr><td>Serialização Map em memória</td><td>1 processo por empresa</td><td>Redis/BullMQ</td></tr>
+      <tr><td>File-based AGENT.md+kb/</td><td>ship urgente, versionado git</td><td>UI/admin de upload (fast-follow)</td></tr>
+      <tr><td>Flat NestJS modules</td><td>sem dor real ainda</td><td>UseCase/Port/Adapter/Mapper</td></tr>
+    </table>
+    <h3>Dependências novas</h3>
+    <p><code>pnpm add @nestjs/* @anthropic-ai/claude-agent-sdk zod pino</code> ·
+    dev: <code>vitest msw @stryker-mutator/core @biomejs/biome</code>. ai-memory = MCP externo (config, não dep npm).</p>
+    <h3>Riscos</h3>
+    <table>
+      <tr><th>Risco</th><th>Mitigação</th></tr>
+      <tr><td>OAuth subscription rate-limit sob carga</td><td>fail-safe escala pro humano (REQ-7); path API key documentado</td></tr>
+      <tr><td>Loop bot↔bot</td><td>guard anti-loop com teste + mutation (Phase 2)</td></tr>
+      <tr><td>Payload AgentBot desconhecido</td><td>Q1 valida antes de Phase 2 fechar</td></tr>
+    </table>
+    <h3>Fora da Fase 1</h3>
+    <p>Follow-up proativo, loop melhoria assistido (agregação/aprovação), UI upload contexto,
+    wablast-no-Chatwoot (workstream separado), multi-tenant.</p>
+    <figure>
+      <!-- {{NOTES_IMAGE: linha do tempo fase1→fase2}} (adiada) -->
+      <figcaption>Fase 1 (atende) → Fase 2 (proativo + melhoria)</figcaption>
+    </figure>
+  </section>
+
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <p>—</p>
+  </section>
+
+</main>
+</body>
+</html>

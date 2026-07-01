@@ -41,8 +41,10 @@ Quando o SDR posta uma resposta `outgoing`, ela dispara o `webhook_url` do canal
 
 Cada componente tem 1 propósito e é testável isolado.
 
-### 1. Webhook receiver (Fastify)
-- Endpoint que recebe eventos no `outgoing_url` do bot.
+### 1. Webhook receiver (NestJS controller)
+- Endpoint que recebe eventos no `outgoing_url` do bot. **Backend: NestJS**
+  (módulos webhook/orchestrator/agent/chatwoot/kb/memory/summarizer). A camada
+  WhatsApp **não existe no agente** — ver [10](10-whatsapp-swap-and-transport.md).
 - **Filtra**: só `event=message_created` + `message_type=incoming` + `private=false`.
 - **Guard anti-loop**: descarta `outgoing` e mensagens do próprio bot (senão o
   agente responde a si mesmo em cascata). Ver [07](07-testing.md) — guard crítico.
