@@ -1,42 +1,35 @@
-# 09 — Perguntas Abertas (resolver na revisão)
+# 09 — Perguntas: resolvidas / gates / abertas
 
-Pendências a fechar antes/durante o plano de implementação. Numeradas p/ referência.
+Status pós-revisão. Planejamento **fechado**: decidíveis resolvidas, restantes
+viram gate de fase ou 1 decisão de negócio do Giovani.
 
-## Validação técnica na instância do Giovani
+## ✅ Resolvidas (decisão travada)
 
-- **Q1 — Coexistência de hooks + payload.** Confirmar (capturando eventos reais)
-  que o Chatwoot dispara o `webhook_url` do canal (bridge) **e** o `outgoing_url`
-  do AgentBot pra mesma conversa/inbox. Capturar o shape exato do payload do
-  evento do bot.
-- **Q2 — Status inicial.** Qual o status de uma conversa nova num inbox com
-  AgentBot? Começa `pending` (bot dono) automático, ou o bot precisa setar? Como o
-  handoff `pending`→`open` se comporta na fila dos agentes.
-- **Q3 — Endpoint de criação do bot.** Na self-hosted do Giovani, criar agent bot
-  responde via Application API (`/api/v1/accounts/{id}/agent_bots`) ou só via
-  Platform API (`/platform/api/v1/agent_bots`)? Isso muda o provisionamento.
+| Q | Decisão |
+|---|---------|
+| Q4 — `responder` implícito vs explícito | **Tool explícita.** Permite escalar sem responder; mais controle. Fixado na Phase 4. |
+| Q6 — formato da config | **`config/<empresa>/config.yaml`** (perfil, ids, flags) + **`AGENT.md`** + `kb/`. Segredos (`bot_access_token`, `webhook_secret`, OAuth token) **só via env/secret-manager**, nunca em git. Serviço próprio — não depende da cifra do bridge. |
+| Q7 — modelo & auth | Default **Sonnet**; **OAuth subscription** em todas as instâncias; trocar por **API key** só na instância que escalar tráfego (path documentado, muda só env). |
+| Q8 — nome/repo | **`chatwoot-sdr-agent`**, repo **separado**. (Veta se quiser outro nome.) |
+| Q10 — métrica nº1 | **% de conversas resolvidas sem humano** (deflexão) como norte da Fase 1. Secundárias: leads quentes entregues, tempo até 1ª resposta. |
+| Q11 — piloto | **Produto do próprio Giovani** (ele atende hoje). 1ª instância = montar `AGENT.md` + `kb/` reais desse produto. |
 
-## Produto / comportamento
+## 🚧 Gates de implementação (validar na instância real — Phase 7, não bloqueiam Phases 0–6)
 
-- **Q4 — `responder` implícito vs explícito.** O texto final do turno vira
-  resposta automática, ou `responder` é tool explícita (permite escalar sem
-  responder)? Recomendo **explícita** (mais controle).
-- **Q5 — Privacidade/LGPD na memória.** O que a memória do contato **pode** e
-  **não pode** guardar? Retenção? Isso afeta o que o summarizer grava.
-- **Q6 — Formato da config.** YAML + env? Um arquivo por empresa? Onde ficam os
-  segredos (reusar cifra do bridge, ou secret manager)?
-- **Q7 — Modelo & auth por empresa.** Default Sonnet ou Opus? OAuth subscription
-  em todas, ou já prever API key pra alguma? Critério de troca.
-- **Q8 — Nome/repo.** `chatwoot-sdr-agent`? Repo separado (recomendado) — confirmar.
+| Q | Gate |
+|---|------|
+| Q1 — coexistência hooks + payload | Capturar evento real: confirmar que canal (bridge) **e** `outgoing_url` do AgentBot disparam juntos; travar shape do payload. Gate p/ fechar Phase 2/7. |
+| Q2 — status inicial da conversa | Confirmar se conversa nova em inbox com bot começa `pending`; ajustar handoff. |
+| Q3 — endpoint criação do bot | Application (`/api/v1/accounts/{id}/agent_bots`) vs Platform API na self-hosted. Muda provisionamento. |
 
-## Fase 2
+## 🟡 Aberta — 1 decisão de negócio do Giovani
 
-- **Q9 — megaAPI e janela 24h.** A megaAPI aplica regra de janela/template do
-  WhatsApp pra proativo, ou manda livre? Apetite de risco de ban pra follow-up?
-  (Giovani responde — ele construiu a megaAPI.)
+- **Q5 — LGPD / retenção na memória.** Proposta default (confirmar): memória do
+  contato guarda **intenção, resumo, status, preferências** — **NÃO** guarda dado
+  sensível cru (documento, dado de pagamento, saúde). Retenção configurável.
+  O summarizer segue essa regra. Confirmar antes da Phase 6.
 
-## Escopo / prioridade
+## 🔵 Fase 2 (não bloqueia Fase 1)
 
-- **Q10 — Métrica de sucesso.** Confirmar as métricas propostas em
-  [01](01-overview-and-decisions.md) e qual é a nº1 pra Fase 1.
-- **Q11 — Primeira empresa piloto.** Qual empresa/segmento vai ser a primeira
-  instância? Isso define a KB/playbook inicial de teste real.
+- **Q9 — megaAPI e janela 24h.** Follow-up proativo: megaAPI aplica janela/template
+  ou manda livre? Apetite de risco de ban? Giovani responde na Fase 2.
