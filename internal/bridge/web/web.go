@@ -18,23 +18,25 @@ const (
 )
 
 type Deps struct {
-	GetAdmin        func(context.Context, string) (bridge.Admin, error)
-	GetSetting      func(context.Context, string) (string, error)
-	SetSetting      func(context.Context, string, string) error
-	FetchInboxes    func(context.Context, discoverReq) ([]Inbox, error)
-	InsertTenant    func(context.Context, bridge.TenantInsert) (uuid.UUID, error)
-	ConfigWebhook   func(context.Context, MegaAPIWebhookConfig) error
-	ConfigCwWebhook  func(context.Context, ChatwootWebhookConfig) error
-	FetchCwHMAC      func(context.Context, ChatwootWebhookConfig) (string, error)
-	UpdateTenantHMAC func(context.Context, uuid.UUID, []byte) error
-	TenantSummaries func(context.Context) ([]bridge.TenantSummary, error)
-	GetTenant       func(context.Context, string) (bridge.Tenant, error)
-	PingDB          func(context.Context) error
-	HeadOK          func(context.Context, string) bool
-	ListMessages    func(context.Context, string, int, int) ([]bridge.Message, error)
-	ListFailed      func(context.Context, int) ([]bridge.Message, error)
-	RequeueMessage  func(context.Context, uuid.UUID) (bridge.Message, error)
-	Key             []byte
+	GetAdmin            func(context.Context, string) (bridge.Admin, error)
+	GetSetting          func(context.Context, string) (string, error)
+	SetSetting          func(context.Context, string, string) error
+	FetchInboxes        func(context.Context, discoverReq) ([]Inbox, error)
+	InsertTenant        func(context.Context, bridge.TenantInsert) (uuid.UUID, error)
+	ConfigWebhook       func(context.Context, MegaAPIWebhookConfig) error
+	ConfigCwWebhook     func(context.Context, ChatwootWebhookConfig) error
+	FetchCwHMAC         func(context.Context, ChatwootWebhookConfig) (string, error)
+	UpdateTenantHMAC    func(context.Context, uuid.UUID, []byte) error
+	RegisterWablast     func(context.Context, WablastWebhookConfig) (string, error)
+	UpdateTenantWablast func(context.Context, uuid.UUID, []byte) error
+	TenantSummaries     func(context.Context) ([]bridge.TenantSummary, error)
+	GetTenant           func(context.Context, string) (bridge.Tenant, error)
+	PingDB              func(context.Context) error
+	HeadOK              func(context.Context, string) bool
+	ListMessages        func(context.Context, string, int, int) ([]bridge.Message, error)
+	ListFailed          func(context.Context, int) ([]bridge.Message, error)
+	RequeueMessage      func(context.Context, uuid.UUID) (bridge.Message, error)
+	Key                 []byte
 }
 
 type Handler struct {
@@ -59,22 +61,24 @@ func New(d Deps) (*Handler, error) {
 
 func NewFromDB(db *bridge.DB, key []byte) (*Handler, error) {
 	return New(Deps{
-		GetAdmin:        db.GetAdmin,
-		GetSetting:      db.GetSetting,
-		SetSetting:      db.SetSetting,
-		InsertTenant:    db.InsertTenant,
-		ConfigWebhook:   ConfigureMegaAPIWebhook,
-		ConfigCwWebhook:  ConfigureChatwootWebhook,
-		FetchCwHMAC:      FetchChatwootInboxHMAC,
-		UpdateTenantHMAC: db.UpdateTenantHMAC,
-		TenantSummaries: db.TenantSummaries,
-		GetTenant:       db.GetTenantBySlug,
-		PingDB:          db.Pool.Ping,
-		HeadOK:          HeadOK,
-		ListMessages:    db.MessagesByTenantSlug,
-		ListFailed:      db.FailedMessages,
-		RequeueMessage:  db.RequeueMessage,
-		Key:             key,
+		GetAdmin:            db.GetAdmin,
+		GetSetting:          db.GetSetting,
+		SetSetting:          db.SetSetting,
+		InsertTenant:        db.InsertTenant,
+		ConfigWebhook:       ConfigureMegaAPIWebhook,
+		ConfigCwWebhook:     ConfigureChatwootWebhook,
+		FetchCwHMAC:         FetchChatwootInboxHMAC,
+		UpdateTenantHMAC:    db.UpdateTenantHMAC,
+		RegisterWablast:     RegisterWablastWebhook,
+		UpdateTenantWablast: db.UpdateTenantWablastSecret,
+		TenantSummaries:     db.TenantSummaries,
+		GetTenant:           db.GetTenantBySlug,
+		PingDB:              db.Pool.Ping,
+		HeadOK:              HeadOK,
+		ListMessages:        db.MessagesByTenantSlug,
+		ListFailed:          db.FailedMessages,
+		RequeueMessage:      db.RequeueMessage,
+		Key:                 key,
 	})
 }
 

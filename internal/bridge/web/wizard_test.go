@@ -69,6 +69,73 @@ func newWizardHandler(t *testing.T, sink *tenantSink, cfg func(context.Context, 
 	return h
 }
 
+func validWablastForm() url.Values {
+	return url.Values{
+		"slug":                {"acme"},
+		"provider":            {"wablast"},
+		"wablast_api_key":     {"wak_live"},
+		"wablast_account_id":  {"acc1"},
+		"chatwoot_url":        {"https://cw.example"},
+		"chatwoot_token":      {"ctok"},
+		"chatwoot_account_id": {"5"},
+		"chatwoot_inbox_id":   {"9"},
+	}
+}
+
+func TestWizardPOST_Wablast_RegistersWebhookAndPersistsSecret(t *testing.T) {
+	sink := &tenantSink{}
+	megaCalled := false
+	var registeredURL string
+	key := bridge.RandomBytes(32)
+	store := newStore()
+	store.data[settingBaseURL] = "https://bridge.example"
+	h, err := New(Deps{
+		Key: key, InsertTenant: sink.insert, GetSetting: store.get, SetSetting: store.set,
+		ConfigWebhook:    func(_ context.Context, _ MegaAPIWebhookConfig) error { megaCalled = true; return nil },
+		ConfigCwWebhook:  func(_ context.Context, _ ChatwootWebhookConfig) error { return nil },
+		FetchCwHMAC:      func(_ context.Context, _ ChatwootWebhookConfig) (string, error) { return "cw-sec", nil },
+		UpdateTenantHMAC: func(_ context.Context, _ uuid.UUID, _ []byte) error { return nil },
+		RegisterWablast: func(_ context.Context, c WablastWebhookConfig) (string, error) {
+			registeredURL = c.WebhookURL
+			return "whsec_generated", nil
+		},
+	})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/tenants", strings.NewReader(validWablastForm().Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	require.Equal(t, http.StatusFound, rr.Code, "body=%s", rr.Body.String())
+	require.Equal(t, "https://bridge.example/v1/wab/acme", registeredURL)
+	require.Equal(t, "wablast", sink.last.Provider)
+	require.NotEmpty(t, sink.last.WablastAPIKeyEnc)
+	require.False(t, megaCalled, "megaAPI webhook must not be configured for a wablast tenant")
+	dec, err := bridge.Decrypt(sink.last.WablastWebhookSecretEnc, key)
+	require.NoError(t, err)
+	require.Equal(t, "whsec_generated", string(dec))
+}
+
+func TestWizardPOST_Wablast_RegisterFailureBlocksCreate(t *testing.T) {
+	sink := &tenantSink{}
+	key := bridge.RandomBytes(32)
+	store := newStore()
+	store.data[settingBaseURL] = "https://bridge.example"
+	h, err := New(Deps{
+		Key: key, InsertTenant: sink.insert, GetSetting: store.get, SetSetting: store.set,
+		FetchCwHMAC:     func(_ context.Context, _ ChatwootWebhookConfig) (string, error) { return "cw-sec", nil },
+		RegisterWablast: func(_ context.Context, _ WablastWebhookConfig) (string, error) { return "", errAllFieldsRequired },
+	})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/tenants", strings.NewReader(validWablastForm().Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(authCookie(t, h, "a@b"))
+	rr := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rr, req)
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+	require.Equal(t, uuid.Nil, sink.id, "tenant must not be inserted when webhook registration fails")
+}
+
 func TestWizardGETRenders(t *testing.T) {
 	h := newWizardHandler(t, &tenantSink{}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/tenants/new", nil)
@@ -465,7 +532,7 @@ func TestWizardHasStepLabels(t *testing.T) {
 		t.Fatalf("status=%d", rr.Code)
 	}
 	body := rr.Body.String()
-	for _, label := range []string{"Identifica", "megaAPI", "Chatwoot", "Revis"}	{
+	for _, label := range []string{"Identifica", "megaAPI", "Chatwoot", "Revis"} {
 		if !strings.Contains(body, label) {
 			t.Fatalf("wizard stepper must label step %q; body=%s", label, body)
 		}

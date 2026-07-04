@@ -13,20 +13,28 @@ import (
 var ErrNotFound = errors.New("bridge: not found")
 
 type Tenant struct {
-	ID                uuid.UUID
-	Slug              string
-	MegaAPIHost       string
-	MegaAPIInstance   string
-	MegaAPITokenEnc   []byte
-	ChatwootURL       string
-	ChatwootTokenEnc  []byte
-	ChatwootAccountID int64
-	ChatwootInboxID   int64
-	HMACSecretEnc     []byte
-	WebhookBearerEnc  []byte
-	PairedAt          *time.Time
-	LastJID           string
+	ID                      uuid.UUID
+	Slug                    string
+	Provider                string
+	MegaAPIHost             string
+	MegaAPIInstance         string
+	MegaAPITokenEnc         []byte
+	ChatwootURL             string
+	ChatwootTokenEnc        []byte
+	ChatwootAccountID       int64
+	ChatwootInboxID         int64
+	HMACSecretEnc           []byte
+	WebhookBearerEnc        []byte
+	WablastAPIKeyEnc        []byte
+	WablastAccountID        string
+	WablastWebhookSecretEnc []byte
+	PairedAt                *time.Time
+	LastJID                 string
 }
+
+const providerMega = "megaapi"
+
+const providerWablast = "wablast"
 
 type Contact struct {
 	TenantID         uuid.UUID
@@ -79,14 +87,18 @@ func (d *DB) Close() {
 }
 
 func (d *DB) GetTenantBySlug(ctx context.Context, slug string) (Tenant, error) {
-	const q = `SELECT id, slug, megaapi_host, megaapi_instance, megaapi_token_enc,
+	const q = `SELECT id, slug, provider, COALESCE(megaapi_host,''),
+COALESCE(megaapi_instance,''), megaapi_token_enc,
 chatwoot_url, chatwoot_token_enc, chatwoot_account_id, chatwoot_inbox_id,
-hmac_secret_enc, webhook_bearer_enc, paired_at, COALESCE(last_jid,'')
+hmac_secret_enc, webhook_bearer_enc,
+wablast_api_key_enc, wablast_account_id, wablast_webhook_secret_enc,
+paired_at, COALESCE(last_jid,'')
 FROM tenants WHERE slug = $1`
 	var t Tenant
-	err := d.Pool.QueryRow(ctx, q, slug).Scan(&t.ID, &t.Slug, &t.MegaAPIHost,
+	err := d.Pool.QueryRow(ctx, q, slug).Scan(&t.ID, &t.Slug, &t.Provider, &t.MegaAPIHost,
 		&t.MegaAPIInstance, &t.MegaAPITokenEnc, &t.ChatwootURL, &t.ChatwootTokenEnc,
 		&t.ChatwootAccountID, &t.ChatwootInboxID, &t.HMACSecretEnc, &t.WebhookBearerEnc,
+		&t.WablastAPIKeyEnc, &t.WablastAccountID, &t.WablastWebhookSecretEnc,
 		&t.PairedAt, &t.LastJID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Tenant{}, ErrNotFound
@@ -101,32 +113,48 @@ func (d *DB) UpdateTenantPairing(ctx context.Context, id uuid.UUID, jid string) 
 }
 
 type TenantInsert struct {
-	Slug              string
-	MegaAPIHost       string
-	MegaAPIInstance   string
-	MegaAPITokenEnc   []byte
-	ChatwootURL       string
-	ChatwootTokenEnc  []byte
-	ChatwootAccountID int64
-	ChatwootInboxID   int64
-	HMACSecretEnc     []byte
-	WebhookBearerEnc  []byte
+	Slug                    string
+	Provider                string
+	MegaAPIHost             string
+	MegaAPIInstance         string
+	MegaAPITokenEnc         []byte
+	ChatwootURL             string
+	ChatwootTokenEnc        []byte
+	ChatwootAccountID       int64
+	ChatwootInboxID         int64
+	HMACSecretEnc           []byte
+	WebhookBearerEnc        []byte
+	WablastAPIKeyEnc        []byte
+	WablastAccountID        string
+	WablastWebhookSecretEnc []byte
 }
 
 func (d *DB) InsertTenant(ctx context.Context, t TenantInsert) (uuid.UUID, error) {
-	const q = `INSERT INTO tenants (slug, megaapi_host, megaapi_instance,
+	provider := t.Provider
+	if provider == "" {
+		provider = providerMega
+	}
+	const q = `INSERT INTO tenants (slug, provider, megaapi_host, megaapi_instance,
 megaapi_token_enc, chatwoot_url, chatwoot_token_enc, chatwoot_account_id,
-chatwoot_inbox_id, hmac_secret_enc, webhook_bearer_enc)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`
+chatwoot_inbox_id, hmac_secret_enc, webhook_bearer_enc,
+wablast_api_key_enc, wablast_account_id, wablast_webhook_secret_enc)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`
 	var id uuid.UUID
-	err := d.Pool.QueryRow(ctx, q, t.Slug, t.MegaAPIHost, t.MegaAPIInstance,
+	err := d.Pool.QueryRow(ctx, q, t.Slug, provider, t.MegaAPIHost, t.MegaAPIInstance,
 		t.MegaAPITokenEnc, t.ChatwootURL, t.ChatwootTokenEnc, t.ChatwootAccountID,
-		t.ChatwootInboxID, t.HMACSecretEnc, t.WebhookBearerEnc).Scan(&id)
+		t.ChatwootInboxID, t.HMACSecretEnc, t.WebhookBearerEnc,
+		t.WablastAPIKeyEnc, t.WablastAccountID, t.WablastWebhookSecretEnc).Scan(&id)
 	return id, err
 }
 
 func (d *DB) UpdateTenantHMAC(ctx context.Context, id uuid.UUID, enc []byte) error {
 	const q = `UPDATE tenants SET hmac_secret_enc = $1 WHERE id = $2`
+	_, err := d.Pool.Exec(ctx, q, enc, id)
+	return err
+}
+
+func (d *DB) UpdateTenantWablastSecret(ctx context.Context, id uuid.UUID, enc []byte) error {
+	const q = `UPDATE tenants SET wablast_webhook_secret_enc = $1 WHERE id = $2`
 	_, err := d.Pool.Exec(ctx, q, enc, id)
 	return err
 }

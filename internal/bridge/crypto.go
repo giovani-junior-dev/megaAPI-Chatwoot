@@ -7,9 +7,51 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"strconv"
+	"strings"
+	"time"
 )
+
+const (
+	stdWebhookPrefix = "whsec_"
+	stdWebhookSkew   = 300 // seconds tolerated between webhook-timestamp and now (anti-replay)
+)
+
+// VerifyStandardWebhook checks a Standard Webhooks signature (standardwebhooks.com):
+// signed = "{id}.{ts}.{body}", sig = base64(HMAC-SHA256(base64decode(secret[6:]), signed)),
+// header "webhook-signature" carries one or more space-separated "v1,<sig>" tokens.
+func VerifyStandardWebhook(secret, id, ts, sigHeader string, body []byte, now time.Time) bool {
+	if !strings.HasPrefix(secret, stdWebhookPrefix) {
+		return false
+	}
+	secretBytes, err := base64.StdEncoding.DecodeString(secret[len(stdWebhookPrefix):])
+	if err != nil {
+		return false
+	}
+	tsInt, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		return false
+	}
+	if skew := now.Unix() - tsInt; skew > stdWebhookSkew || skew < -stdWebhookSkew {
+		return false
+	}
+	mac := hmac.New(sha256.New, secretBytes)
+	mac.Write([]byte(id + "." + ts + "." + string(body)))
+	expected := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	for _, part := range strings.Fields(sigHeader) {
+		version, sig, ok := strings.Cut(part, ",")
+		if !ok || version != "v1" {
+			continue
+		}
+		if subtle.ConstantTimeCompare([]byte(sig), []byte(expected)) == 1 {
+			return true
+		}
+	}
+	return false
+}
 
 const nonceLen = 12
 

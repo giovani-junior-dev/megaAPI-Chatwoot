@@ -59,6 +59,29 @@ bd close <id>         # Complete work
 <!-- END BEADS INTEGRATION -->
 
 
+## Providers (megaAPI + WaBlast)
+
+The bridge relays two WhatsApp gateways, selected **per tenant** via
+`tenants.provider` (`megaapi` | `wablast`). See
+[`docs/adr/0001-provider-seam.md`](docs/adr/0001-provider-seam.md).
+
+- **megaAPI** (unofficial): inbound `POST /v1/wa/{slug}` (Bearer via `?token=`),
+  outbound to `/rest/sendMessage/...`.
+- **WaBlast** (official Meta Cloud, `api.wablastmessage.com`): inbound
+  `POST /v1/wab/{slug}` authed with **Standard Webhooks**
+  (`webhook-id`/`webhook-timestamp`/`webhook-signature`, secret `whsec_`,
+  verified by `VerifyStandardWebhook`). Outbound media is **2-step**
+  (`POST /v1/media` upload → `POST /v1/messages` with `media_id`). Base URL is
+  `WABLAST_BASE_URL` (default prod) — set it to a test server in unit tests.
+- **24h window**: WaBlast returns `409 WINDOW_CLOSED` for free-form replies
+  outside the window → the bridge posts a **private note** to Chatwoot and marks
+  the message failed (non-retriable). Templates are out of MVP scope.
+- **Wizard fail-closed**: creating a wablast tenant registers the webhook on
+  WaBlast and persists the returned `whsec_`; if registration fails the tenant
+  is **not** created (the secret is returned only once).
+- Adding a gateway = one new `*Provider` impl + a `providerFor` arm. Do not
+  re-scatter gateway logic across handlers.
+
 ## Build & Test
 
 ```bash

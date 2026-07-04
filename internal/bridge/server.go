@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -85,6 +86,7 @@ func (s *Server) Routes() http.Handler {
 	r.Post("/admin/retry/{id}", s.handleAdminRetry)
 	s.mountPprof(r)
 	r.Post("/v1/wa/{slug}", s.handleWAWebhook)
+	r.Post("/v1/wab/{slug}", s.handleWABWebhook)
 	r.Post("/v1/cw/{slug}", s.handleCWWebhook)
 	return r
 }
@@ -162,6 +164,53 @@ func (s *Server) handleWAWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.enqueue(w, r.Context(), tenant.ID, directionIn, extID, body, s.Inbox)
+}
+
+func (s *Server) handleWABWebhook(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := s.lookupTenant(w, r)
+	if !ok {
+		return
+	}
+	if tenant.Provider != providerWablast {
+		http.Error(w, "not a wablast tenant", http.StatusNotFound)
+		return
+	}
+	body, ok := readBodyOr400(w, r)
+	if !ok {
+		return
+	}
+	if os.Getenv("DEBUG_SKIP_HMAC") != "1" {
+		authed, err := s.checkWablastSig(r, tenant, body)
+		if err != nil {
+			s.Log.Err(err).Str("tenant_id", tenant.ID.String()).Msg("decrypt wablast secret")
+			http.Error(w, "crypto error", http.StatusInternalServerError)
+			return
+		}
+		if !authed {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+	}
+	extID, received := wablastInboundID(body)
+	if !received {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ignored"})
+		return
+	}
+	if extID == "" {
+		http.Error(w, "missing external id", http.StatusBadRequest)
+		return
+	}
+	s.enqueue(w, r.Context(), tenant.ID, directionIn, extID, body, s.Inbox)
+}
+
+func (s *Server) checkWablastSig(r *http.Request, t Tenant, body []byte) (bool, error) {
+	secret, err := Decrypt(t.WablastWebhookSecretEnc, s.Key)
+	if err != nil {
+		return false, err
+	}
+	return VerifyStandardWebhook(string(secret),
+		r.Header.Get("webhook-id"), r.Header.Get("webhook-timestamp"),
+		r.Header.Get("webhook-signature"), body, time.Now()), nil
 }
 
 func (s *Server) handleCWWebhook(w http.ResponseWriter, r *http.Request) {

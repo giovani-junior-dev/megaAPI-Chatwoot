@@ -691,17 +691,22 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
 <section class="wizard-shell"
          x-data="{
            step: 1,
+           provider: 'megaapi',
            slug: '',
            megaapi_host: '',
            megaapi_instance: '',
            megaapi_token: '',
+           wablast_api_key: '',
+           wablast_account_id: '',
            chatwoot_url: '',
            chatwoot_token: '',
            chatwoot_account_id: '',
            chatwoot_inbox_id: '',
            requiredFieldsForStep(s) {
              if (s === 1) return ['slug'];
-             if (s === 2) return ['megaapi_host', 'megaapi_instance', 'megaapi_token'];
+             if (s === 2) return this.provider === 'wablast'
+               ? ['wablast_api_key']
+               : ['megaapi_host', 'megaapi_instance', 'megaapi_token'];
              if (s === 3) return ['chatwoot_url', 'chatwoot_token', 'chatwoot_account_id', 'chatwoot_inbox_id'];
              return [];
            },
@@ -724,7 +729,7 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
     </div>
     <div class="step" :data-state="stateFor(2)">
       <span class="step-bullet">2</span>
-      <span class="step-label">megaAPI</span>
+      <span class="step-label" x-text="provider === 'wablast' ? 'WaBlast' : 'megaAPI'"></span>
     </div>
     <div class="step" :data-state="stateFor(3)">
       <span class="step-bullet">3</span>
@@ -747,24 +752,51 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
         <input name="slug" required x-model="slug" class="input" placeholder="empresa-x">
         <span class="field__hint">Identificador único usado na URL do webhook.</span>
       </label>
+      <fieldset class="block">
+        <span class="field__label">Provedor WhatsApp</span>
+        <label class="flex gap-2" style="align-items:center">
+          <input type="radio" name="provider" value="megaapi" x-model="provider"> megaAPI (não-oficial)
+        </label>
+        <label class="flex gap-2" style="align-items:center">
+          <input type="radio" name="provider" value="wablast" x-model="provider"> WaBlast (API oficial Meta)
+        </label>
+      </fieldset>
       <div class="flex gap-2">
         <button type="button" @click="next()" :disabled="!canAdvance()" class="btn btn-primary">Próximo</button>
       </div>
     </div>
 
     <div x-show="step===2" class="space-y-3">
-      <label class="block">
-        <span class="field__label">Host megaAPI</span>
-        <input name="megaapi_host" required x-model="megaapi_host" class="input" placeholder="https://mega.exemplo.com">
-      </label>
-      <label class="block">
-        <span class="field__label">Instância</span>
-        <input name="megaapi_instance" required x-model="megaapi_instance" class="input">
-      </label>
-      <label class="block">
-        <span class="field__label">Token</span>
-        <input name="megaapi_token" required x-model="megaapi_token" class="input">
-      </label>
+      <template x-if="provider === 'megaapi'">
+        <div class="space-y-3">
+          <label class="block">
+            <span class="field__label">Host megaAPI</span>
+            <input name="megaapi_host" :required="provider==='megaapi'" x-model="megaapi_host" class="input" placeholder="https://mega.exemplo.com">
+          </label>
+          <label class="block">
+            <span class="field__label">Instância</span>
+            <input name="megaapi_instance" :required="provider==='megaapi'" x-model="megaapi_instance" class="input">
+          </label>
+          <label class="block">
+            <span class="field__label">Token</span>
+            <input name="megaapi_token" :required="provider==='megaapi'" x-model="megaapi_token" class="input">
+          </label>
+        </div>
+      </template>
+      <template x-if="provider === 'wablast'">
+        <div class="space-y-3">
+          <label class="block">
+            <span class="field__label">API Key (wak_…)</span>
+            <input name="wablast_api_key" :required="provider==='wablast'" x-model="wablast_api_key" class="input" placeholder="wak_...">
+            <span class="field__hint">Chave criada no painel WaBlast em Desenvolvedores → Chaves de API.</span>
+          </label>
+          <label class="block">
+            <span class="field__label">Account ID (opcional)</span>
+            <input name="wablast_account_id" x-model="wablast_account_id" class="input" placeholder="conexão padrão se vazio">
+            <span class="field__hint">ID da conexão WhatsApp (GET /v1/accounts). Vazio usa a conexão padrão.</span>
+          </label>
+        </div>
+      </template>
       <div class="flex gap-2">
         <button type="button" @click="prev()" class="btn btn-ghost">Voltar</button>
         <button type="button" @click="next()" :disabled="!canAdvance()" class="btn btn-primary">Próximo</button>
@@ -800,13 +832,19 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
       <h2 class="field__label">Resumo</h2>
       <dl class="space-y-1" style="font-size:14px">
         <div><dt style="display:inline;color:var(--fg-muted)">Slug:</dt> <dd style="display:inline" x-text="slug"></dd></div>
-        <div><dt style="display:inline;color:var(--fg-muted)">megaAPI host:</dt> <dd style="display:inline" x-text="megaapi_host"></dd></div>
-        <div><dt style="display:inline;color:var(--fg-muted)">Instância:</dt> <dd style="display:inline" x-text="megaapi_instance"></dd></div>
+        <div><dt style="display:inline;color:var(--fg-muted)">Provedor:</dt> <dd style="display:inline" x-text="provider === 'wablast' ? 'WaBlast (oficial Meta)' : 'megaAPI'"></dd></div>
+        <template x-if="provider === 'megaapi'">
+          <div><dt style="display:inline;color:var(--fg-muted)">megaAPI host:</dt> <dd style="display:inline" x-text="megaapi_host"></dd></div>
+        </template>
+        <template x-if="provider === 'wablast'">
+          <div><dt style="display:inline;color:var(--fg-muted)">WaBlast account:</dt> <dd style="display:inline" x-text="wablast_account_id || 'conexão padrão'"></dd></div>
+        </template>
         <div><dt style="display:inline;color:var(--fg-muted)">Chatwoot URL:</dt> <dd style="display:inline" x-text="chatwoot_url"></dd></div>
         <div><dt style="display:inline;color:var(--fg-muted)">Account ID:</dt> <dd style="display:inline" x-text="chatwoot_account_id"></dd></div>
         <div><dt style="display:inline;color:var(--fg-muted)">Inbox ID:</dt> <dd style="display:inline" x-text="chatwoot_inbox_id"></dd></div>
       </dl>
-      <p class="field__hint">Base URL atual: <code>https://bridge.example</code>. Ao finalizar, o webhook da instância megaAPI será configurado automaticamente.</p>
+      <p class="field__hint" x-show="provider === 'megaapi'">Base URL atual: <code>https://bridge.example</code>. Ao finalizar, o webhook da instância megaAPI será configurado automaticamente.</p>
+      <p class="field__hint" x-show="provider === 'wablast'">Base URL atual: <code>https://bridge.example</code>. Ao finalizar, o webhook será registrado na WaBlast automaticamente (secret guardado criptografado).</p>
       <div class="flex gap-2">
         <button type="button" @click="prev()" class="btn btn-ghost">Voltar</button>
         <button type="submit" class="btn btn-primary">Criar tenant</button>

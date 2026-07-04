@@ -60,10 +60,7 @@ func (s *Server) cwPostMultipart(ctx context.Context, t Tenant, endpoint, conten
 }
 
 func (s *Server) fetchInboundMedia(ctx context.Context, t Tenant, a Attachment) ([]byte, string, error) {
-	if a.MediaKey != "" {
-		return s.downloadMegaAPIMedia(ctx, t, a)
-	}
-	return downloadPublicURL(ctx, a)
+	return s.providerFor(t).DownloadMedia(ctx, t, a)
 }
 
 func (s *Server) downloadMegaAPIMedia(ctx context.Context, t Tenant, a Attachment) ([]byte, string, error) {
@@ -212,4 +209,3 @@ func newFilePart(mw *multipart.Writer, field, filename, contentType string) (io.
 	h.Set("Content-Type", contentType)
 	return mw.CreatePart(h)
 }
-

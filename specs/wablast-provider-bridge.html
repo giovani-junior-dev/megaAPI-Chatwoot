@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan: WaBlast como 2º provider do bridge</title>
+<style>
+  :root{
+    --cw-blue:#1f93ff; --mega-green:#25d366; --wa-green:#075e54; --meta:#0866ff;
+    --ink:#0e1726; --muted:#5b6b82; --line:#e3e8f0; --bg:#f7f9fc; --card:#ffffff;
+    --ok:#1a7f37; --warn:#b45309; --bad:#b91c1c;
+    --mono:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:Inter,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    --radius:12px; --shadow:0 1px 2px rgba(14,23,38,.06),0 8px 24px rgba(14,23,38,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
+  main{max-width:960px;margin:0 auto;padding:40px 24px 96px}
+  h1{font-size:30px;margin:0 0 4px;letter-spacing:-.02em}
+  h2{font-size:22px;margin:40px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+  h3{font-size:17px;margin:22px 0 8px}
+  h4{font-size:14px;margin:16px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  p{margin:8px 0}
+  code{font-family:var(--mono);font-size:.88em;background:#eef2f8;padding:1px 5px;border-radius:5px}
+  pre{background:#0e1726;color:#e6edf6;padding:16px;border-radius:var(--radius);overflow:auto;font-family:var(--mono);font-size:12.5px;line-height:1.5}
+  pre code{background:none;color:inherit;padding:0}
+  header{border-left:5px solid var(--cw-blue);padding-left:16px}
+  .sub{color:var(--muted);margin:0 0 8px}
+  .badges span{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;margin:2px 4px 2px 0}
+  .b-cw{background:rgba(31,147,255,.12);color:var(--cw-blue)} .b-mega{background:rgba(37,211,102,.14);color:#0f9d58}
+  .b-meta{background:rgba(8,102,255,.12);color:var(--meta)} .b-go{background:#eef2f8;color:var(--muted)}
+  details.meta{margin:12px 0}
+  details.meta dl{display:grid;grid-template-columns:120px 1fr;gap:2px 12px;font-size:12.5px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+  details.meta dt{color:var(--muted);font-weight:600} details.meta dd{margin:0;font-family:var(--mono);word-break:break-word}
+  section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px 24px;margin:16px 0;box-shadow:var(--shadow)}
+  figure{margin:16px 0;text-align:center} figure figcaption{font-size:12px;color:var(--muted);margin-top:6px}
+  .imgph{border:2px dashed var(--line);border-radius:var(--radius);padding:28px;color:var(--muted);font-size:13px;background:repeating-linear-gradient(45deg,#fafcff,#fafcff 10px,#f2f6fc 10px,#f2f6fc 20px)}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:#fafcff}
+  tr:last-child td{border-bottom:none}
+  .tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;text-transform:uppercase}
+  .tag.existing{background:#eef2f8;color:var(--muted)} .tag.new{background:rgba(37,211,102,.16);color:#0f9d58}
+  ul{margin:8px 0;padding-left:22px} li{margin:4px 0}
+  ul.checklist{list-style:none;padding-left:4px} ul.checklist li{margin:5px 0}
+  .status{background:#eef2f8;font-weight:700}
+  .phase{border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin:14px 0;background:#fcfdff}
+  .phase h3{margin-top:0}
+  .loop{background:rgba(180,83,9,.08);border:1px solid rgba(180,83,9,.25);color:var(--warn);border-radius:10px;padding:10px 14px;font-size:13px;margin:12px 0 2px}
+  .req{border-left:3px solid var(--meta);padding:6px 0 6px 14px;margin:8px 0;font-size:13.5px}
+  .req b{color:var(--meta)}
+  .callout{border-radius:10px;padding:12px 16px;margin:12px 0;font-size:13.5px}
+  .callout.warn{background:rgba(180,83,9,.07);border:1px solid rgba(180,83,9,.22)}
+  .callout.ok{background:rgba(26,127,55,.07);border:1px solid rgba(26,127,55,.22)}
+  .flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;font-family:var(--mono);margin:10px 0}
+  .flow .n{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+  .flow .a{color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+
+  <header>
+    <h1>Plan: WaBlast como 2º provider do bridge</h1>
+    <p class="sub">Agregar gateway API oficial Meta WhatsApp Cloud ao <code>chatwoot-megaapi-bridge</code> — sem remover megaAPI. Um provider por tenant.</p>
+    <p class="badges">
+      <span class="b-cw">Chatwoot</span><span class="b-mega">megaAPI (mantido)</span>
+      <span class="b-meta">WaBlast / Meta oficial</span><span class="b-go">Go 1.23 · pgx · chi</span>
+    </p>
+    <details class="meta">
+      <summary>Metadata</summary>
+      <dl>
+        <dt>created</dt>      <dd>2026-07-01</dd>
+        <dt>modified</dt>     <dd>2026-07-01</dd>
+        <dt>commits</dt>      <dd>—</dd>
+        <dt>agent name</dt>   <dd>claude-opus-4-8</dd>
+        <dt>session id</dt>   <dd>255894c1-3d6e-4d1f-b000-eab892ba1524</dd>
+        <dt>back refs</dt>    <dd>C:\Users\GEOVANE\.claude\plans\claude-vamos-fazer-uma-quizzical-canyon.md, .agents/plans/reset-mvp.md</dd>
+        <dt>forward refs</dt> <dd>—</dd>
+      </dl>
+    </details>
+  </header>
+
+  <figure>
+    <div class="imgph"><!-- HERO_IMAGE: split pipeline — Chatwoot center, megaAPI branch (green) + WaBlast/Meta branch (blue), one bridge box. Deferred. --></div>
+    <figcaption>Bridge dual-provider: Chatwoot ↔ (megaAPI | WaBlast) selecionado por tenant.</figcaption>
+  </figure>
+
+  <section id="purpose">
+    <h2>Purpose</h2>
+    <p>Bridge hoje relaia <b>megaAPI (WhatsApp não-oficial) ↔ Chatwoot</b>. Adicionar <b>WaBlast</b> (<code>api.wablastmessage.com</code>, gateway oficial Meta Cloud) como 2º provider, aditivo. Operador escolhe provider por tenant no wizard; os dois coexistem no mesmo Chatwoot (slugs/inboxes distintos).</p>
+    <div class="flow">
+      <span class="n">Cliente WhatsApp</span><span class="a">↔</span>
+      <span class="n">gateway (megaAPI | WaBlast)</span><span class="a">↔</span>
+      <span class="n">bridge /v1</span><span class="a">↔</span>
+      <span class="n">Chatwoot API-inbox</span><span class="a">↔</span>
+      <span class="n">agente</span>
+    </div>
+  </section>
+
+  <section id="problem">
+    <h2>Problem</h2>
+    <p>Código <b>hardcoded em megaAPI</b>: <code>processInbound</code>/<code>processOutbound</code>, colunas <code>megaapi_*</code>, rotas <code>/v1/wa</code>+<code>/v1/cw</code>. Sem seam de provider. WaBlast difere em 4 pontos que quebram reuso direto:</p>
+    <table>
+      <tr><th>Dimensão</th><th>megaAPI (atual)</th><th>WaBlast (novo)</th></tr>
+      <tr><td>Auth inbound</td><td>Bearer via <code>?token=</code></td><td><b>Standard Webhooks</b> (<code>webhook-id/timestamp/signature</code>, HMAC-SHA256, secret <code>whsec_</code>)</td></tr>
+      <tr><td>Mídia outbound</td><td>1 passo (manda URL)</td><td><b>2 passos</b>: upload <code>POST /v1/media</code> → <code>media_id</code> → <code>POST /v1/messages</code></td></tr>
+      <tr><td>Mídia inbound</td><td><code>downloadMediaMessage</code> (POST)</td><td><code>GET /v1/media/{id}</code> (Bearer <code>wak_</code>)</td></tr>
+      <tr><td>Janela 24h</td><td>ignora (não-oficial)</td><td>free-form fora de 24h → <code>409 WINDOW_CLOSED</code></td></tr>
+    </table>
+    <figure><div class="imgph"><!-- PROBLEM_IMAGE: hardcoded megaAPI funnel vs desired pluggable provider slot. Deferred. --></div>
+    <figcaption>Sem abstração de provider hoje — cada diferença WaBlast exige seam novo.</figcaption></figure>
+  </section>
+
+  <section id="solution">
+    <h2>Solution</h2>
+    <p>Seam mínimo <code>Provider</code> (interface justificada: convention libera na 2ª implementação real). Cada gateway isolado em 1 arquivo. megaAPI vira wrapper das funções atuais — <b>zero mudança de comportamento</b>. <code>processInbound</code>/<code>processOutbound</code> ficam provider-agnósticos via <code>providerFor(t)</code>.</p>
+<pre><code>// internal/bridge/provider.go
+type InboundMessage struct {
+    ContactID  string      // digits sem "+" (== waContactJID)
+    Name       string
+    Text       string
+    Attachment *Attachment // nil se texto
+    ExternalID string      // messages.external_id (idempotência)
+}
+type Provider interface {
+    SendText(ctx context.Context, t Tenant, to, text string) error
+    SendMedia(ctx context.Context, t Tenant, to string, a Attachment) error
+    ParseInbound(body []byte) (InboundMessage, error)
+    DownloadMedia(ctx context.Context, t Tenant, a Attachment) ([]byte, string, error)
+}
+func (s *Server) providerFor(t Tenant) Provider // switch t.Provider
+var errWindowClosed = errors.New("wablast: 24h window closed")</code></pre>
+    <figure><div class="imgph"><!-- SOLUTION_IMAGE: Provider interface with two concrete impls (megaProvider, wablastProvider) feeding shared Chatwoot core. Deferred. --></div>
+    <figcaption>Interface fina, 2 impls concretas, core Chatwoot compartilhado.</figcaption></figure>
+
+    <h3>Requisitos (EARS)</h3>
+    <div class="req"><b>REQ-1 (ubiquitous):</b> The bridge shall support provider <code>wablast</code> alongside <code>megaapi</code>, selected per tenant via column <code>provider</code>.</div>
+    <div class="req"><b>REQ-2 (state-driven):</b> While tenant provider is <code>megaapi</code>, the bridge shall behave byte-identically to today (regression-free).</div>
+    <div class="req"><b>REQ-3 (event-driven):</b> When WaBlast POSTs <code>message.received</code> to <code>/v1/wab/{slug}</code>, the bridge shall resolve the Chatwoot contact+conversation and post an <code>incoming</code> message.</div>
+    <div class="req"><b>REQ-4 (event-driven):</b> When a Chatwoot agent sends an outgoing message on a wablast tenant, the bridge shall relay it via <code>POST /v1/messages</code> (text) or media upload+send (2-step).</div>
+    <div class="req"><b>REQ-5 (event-driven):</b> When inbound media arrives, the bridge shall fetch bytes via <code>GET /v1/media/{id}</code> and attach them to the Chatwoot message.</div>
+    <div class="req"><b>REQ-6 (unwanted):</b> If WaBlast returns <code>409 WINDOW_CLOSED</code> on an agent reply, then the bridge shall mark the message <code>failed</code> (non-retriable) and post a private note instructing template use.</div>
+    <div class="req"><b>REQ-7 (unwanted):</b> If the inbound Standard-Webhooks signature is invalid or <code>webhook-timestamp</code> is older than 300s, then the bridge shall reject with 401.</div>
+    <div class="req"><b>REQ-8 (unwanted):</b> If WaBlast webhook registration returns no <code>whsec_</code> during wizard create, then the wizard shall hard-fail with a 400 PT-BR and not persist a half-configured tenant.</div>
+  </section>
+
+  <section id="files" class="files">
+    <h2>Relevant Files</h2>
+    <h3>Existing Files</h3>
+    <ul>
+      <li><span class="tag existing">existing</span> <code>internal/bridge/storage.go</code> — <code>Tenant</code>/<code>TenantInsert</code>+SQL; add provider+wablast cols, <code>UpdateTenantWablastSecret</code></li>
+      <li><span class="tag existing">existing</span> <code>internal/bridge/bridge.go</code> — <code>tenantByID</code> SELECT; refactor <code>processInbound</code>/<code>processOutbound</code> to <code>providerFor</code>; add <code>postChatwootPrivateNote</code></li>
+      <li><span class="tag existing">existing</span> <code>internal/bridge/server.go</code> — route <code>/v1/wab/{slug}</code> + <code>handleWABWebhook</code> (provider guard, sig verify)</li>
+      <li><span class="tag existing">existing</span> <code>internal/bridge/crypto.go</code> — add <code>VerifyStandardWebhook</code> (subtle constant-time)</li>
+      <li><span class="tag existing">existing</span> <code>internal/bridge/inbound_media.go</code> — reuse <code>downloadPublicURL</code>, <code>newFilePart</code> for WaBlast upload</li>
+      <li><span class="tag existing">existing</span> <code>internal/bridge/media.go</code> — <code>prepareMedia</code> stays inside megaProvider path</li>
+      <li><span class="tag existing">existing</span> <code>internal/bridge/tenant_build.go</code> — <code>TenantSpec</code>+<code>BuildTenantInsert</code> provider branch</li>
+      <li><span class="tag existing">existing</span> <code>internal/bridge/web/wizard.go</code> + <code>wizard.html</code> — provider selector, fail-closed webhook register, skip pairing</li>
+      <li><span class="tag existing">existing</span> <code>cmd/bridge/main.go</code> — CLI flags <code>--provider</code>/<code>--wablast-*</code>; wire <code>RegisterWablastWebhook</code> dep; env <code>WABLAST_BASE_URL</code></li>
+    </ul>
+    <h3>New Files</h3>
+    <ul>
+      <li><span class="tag new">new</span> <code>migrations/0005_wablast.sql</code> — cols aditivas em <code>tenants</code></li>
+      <li><span class="tag new">new</span> <code>internal/bridge/provider.go</code> — interface + <code>InboundMessage</code> + <code>providerFor</code> + sentinels</li>
+      <li><span class="tag new">new</span> <code>internal/bridge/megaapi.go</code> — <code>megaProvider</code> (wrapper das funções atuais)</li>
+      <li><span class="tag new">new</span> <code>internal/bridge/wablast.go</code> — <code>wablastProvider</code> + <code>classifyWablast</code> + <code>registerWebhook</code></li>
+      <li><span class="tag new">new</span> <code>internal/bridge/wablast_test.go</code>, <code>provider_test.go</code> — tabelas RED-first (+ casos em <code>crypto_test.go</code>)</li>
+    </ul>
+  </section>
+
+  <section id="phases">
+    <h2>Implementation Phases</h2>
+    <p><strong>IMPORTANT:</strong> Execute cada fase e task em ordem, topo→baixo. TDD obrigatório: RED antes de código de produção.</p>
+    <p>Status: <code>[]</code> idle · <code>[wip]</code> wip · <code>[x]</code> done · <code>[f]</code> failed.</p>
+
+    <!-- PHASE 1 -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 1: Schema + Tenant model</h3>
+      <p>Colunas aditivas; megaAPI intacta. Sem lógica testável nova além de round-trip de persistência.</p>
+      <h4>1. Migration</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> criar <code>migrations/0005_wablast.sql</code></li>
+      </ul>
+<pre><code>ALTER TABLE tenants
+  ADD COLUMN provider text NOT NULL DEFAULT 'megaapi',
+  ADD COLUMN wablast_api_key_enc bytea,
+  ADD COLUMN wablast_account_id text NOT NULL DEFAULT '',
+  ADD COLUMN wablast_webhook_secret_enc bytea;
+-- megaapi_host/instance/token_enc: relaxar NOT NULL (tenant wablast grava vazio)
+ALTER TABLE tenants
+  ALTER COLUMN megaapi_host DROP NOT NULL,
+  ALTER COLUMN megaapi_instance DROP NOT NULL,
+  ALTER COLUMN megaapi_token_enc DROP NOT NULL;
+-- guarda de integridade por provider
+ALTER TABLE tenants ADD CONSTRAINT tenants_provider_check
+  CHECK (provider IN ('megaapi','wablast'));</code></pre>
+      <h4>2. Struct + SQL</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>Tenant</code>+<code>TenantInsert</code>: <code>Provider</code>, <code>WablastAPIKeyEnc []byte</code>, <code>WablastAccountID string</code>, <code>WablastWebhookSecretEnc []byte</code></li>
+        <li><code class="status">[]</code> ajustar SELECT de <code>GetTenantBySlug</code> + <code>tenantByID</code> (bridge.go) e INSERT de <code>InsertTenant</code></li>
+        <li><code class="status">[]</code> add <code>UpdateTenantWablastSecret(ctx,id,enc)</code> (análogo a <code>UpdateTenantHMAC</code>)</li>
+      </ul>
+      <h4>3. Testing Strategy</h4>
+      <p>Go integration (testcontainers, já usado): round-trip insert/select tenant wablast + tenant megaAPI legado inalterado.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>make integration</code> — migração aplica, colunas presentes, tenants antigos default <code>megaapi</code></li>
+        <li><code class="status">[]</code> <code>make build</code> — compila com struct nova</li>
+      </ul>
+      <div class="loop">🔁 Não sair da fase até todos os boxes verdes.</div>
+    </div>
+
+    <!-- PHASE 2 -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 2: Provider seam + megaProvider wrapper</h3>
+      <p>Extrair interface e normalizar inbound. megaAPI passa a ser <code>megaProvider</code> chamando funções existentes. Suíte atual deve continuar 100% verde (regressão-zero = REQ-2).</p>
+      <h4>1. provider.go</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> definir <code>Provider</code>, <code>InboundMessage</code>, <code>providerFor(t)</code> (switch), <code>errWindowClosed</code></li>
+      </ul>
+      <h4>2. megaapi.go (RED→GREEN)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: test <code>megaProvider.ParseInbound</code> == adapter de <code>parseWA</code>→<code>InboundMessage</code> (texto+mídia+fromMe já filtrado na rota)</li>
+        <li><code class="status">[]</code> GREEN: <code>megaProvider</code> embrulha <code>sendMegaAPIText</code>, <code>prepareMedia</code>+<code>sendMegaAPIMedia</code>, <code>downloadMegaAPIMedia</code></li>
+        <li><code class="status">[]</code> refactor <code>processInbound</code>/<code>processOutbound</code> p/ <code>providerFor(t)</code> (mesmo fluxo Chatwoot downstream)</li>
+      </ul>
+      <h4>3. Testing Strategy</h4>
+      <p>Table-driven unit; garantir paridade. Nenhum teste megaAPI existente pode mudar de expectativa.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>go test ./internal/bridge/ -run 'Mega|Provider|Inbound|Outbound'</code> — verde</li>
+        <li><code class="status">[]</code> <code>make test</code> — suíte inteira sem regressão</li>
+      </ul>
+      <div class="loop">🔁 Regressão em teste megaAPI = STOP e corrigir antes de seguir.</div>
+    </div>
+
+    <!-- PHASE 3 -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 3: wablastProvider + assinatura</h3>
+      <p>Coração da feature. Tudo contra <code>httptest.Server</code> (contract). <code>WABLAST_BASE_URL</code> injeta host de teste.</p>
+      <h4>1. VerifyStandardWebhook (crypto.go, RED→GREEN)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: sig válida aceita; sig adulterada rejeita; <code>ts</code> &gt;300s rejeita (replay); multi-sig (space-sep) aceita se um casa</li>
+        <li><code class="status">[]</code> GREEN: strip <code>whsec_</code>+b64decode; <code>HMAC-SHA256(secret, id+"."+ts+"."+body)</code> b64; <code>subtle.ConstantTimeCompare</code></li>
+      </ul>
+      <h4>2. ParseInbound + classifyWablast (RED→GREEN)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: envelope <code>{type:"message.received",data:{from,contact_name,type,text,media}}</code> → <code>InboundMessage</code>; <code>from</code> strip <code>+</code> (== <code>waContactJID</code>); tipos ≠ received ignorados</li>
+        <li><code class="status">[]</code> RED: <code>classifyWablast</code>: <code>WINDOW_CLOSED</code>→<code>errWindowClosed</code>; <code>META_RATE_LIMIT</code>/<code>TIER_DAILY_CAP_REACHED</code>/<code>ACCOUNT_TOKEN_INVALID</code>/429/5xx→retriable; demais 4xx→notRetriable</li>
+        <li><code class="status">[]</code> GREEN: implementar parse + classify</li>
+      </ul>
+      <h4>3. Send/Download (contract, RED→GREEN)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: <code>SendText</code> → <code>POST /v1/messages {to,type:text,text:{body},account_id}</code> + <code>Bearer wak_</code></li>
+        <li><code class="status">[]</code> RED: <code>SendMedia</code> 2-step: <code>downloadPublicURL</code>→<code>POST /v1/media?account_id=</code>(multipart <code>file</code>)→<code>media_id</code>→<code>POST /v1/messages {type,media:{id,caption,filename}}</code>; audio→<code>audio</code> (não <code>ptt</code>)</li>
+        <li><code class="status">[]</code> RED: <code>DownloadMedia</code> → <code>GET /v1/media/{MediaKey}</code>; <code>410 MEDIA_EXPIRED</code>→notRetriable</li>
+        <li><code class="status">[]</code> RED: <code>registerWebhook</code> → <code>POST /v1/webhooks {url,enabledEvents:["message.received"],accountId}</code> → retorna <code>whsec_</code>; erro sem secret propaga</li>
+        <li><code class="status">[]</code> GREEN: implementar métodos <code>wablastProvider</code></li>
+      </ul>
+      <h4>4. Testing Strategy</h4>
+      <p>Contract via <code>net/http/httptest</code> (sem rede real); table-driven; F.I.R.S.T (&lt;100ms/test).</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>go test ./internal/bridge/ -run Wablast -race</code> — verde</li>
+        <li><code class="status">[]</code> <code>go test ./internal/bridge/ -run 'StandardWebhook'</code> — sig/replay cobertos</li>
+        <li><code class="status">[]</code> <code>go test -cover ./internal/bridge/</code> — novos arquivos ≥80%</li>
+      </ul>
+      <div class="loop">🔁 Loop RED→GREEN→REFACTOR por método. Não avançar com box vermelho.</div>
+    </div>
+
+    <!-- PHASE 4 -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 4: Rota inbound + WINDOW_CLOSED</h3>
+      <p>Ligar HTTP layer e tratamento de janela.</p>
+      <h4>1. handleWABWebhook (server.go, RED→GREEN)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: rota <code>POST /v1/wab/{slug}</code>; guard <code>provider=="wablast"</code> (senão 404); sig inválida→401; <code>type≠message.received</code>→200 ignorado; <code>extID=data.message_id</code>; enfileira <code>directionIn</code></li>
+        <li><code class="status">[]</code> RED: respeita <code>DEBUG_SKIP_HMAC</code> (dev)</li>
+        <li><code class="status">[]</code> GREEN: handler + registro da rota (<code>/v1/wa</code>,<code>/v1/cw</code> inalteradas)</li>
+      </ul>
+      <h4>2. postChatwootPrivateNote + WINDOW_CLOSED (bridge.go, RED→GREEN)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: outbound com <code>errWindowClosed</code> → posta nota privada (<code>message_type:outgoing,private:true</code>) no <code>conversation.id</code> + retorna <code>notRetriable</code> (não re-tenta)</li>
+        <li><code class="status">[]</code> GREEN: <code>postChatwootPrivateNote(ctx,t,convID,text)</code> via <code>cwDo</code>; wire no <code>processOutbound</code></li>
+      </ul>
+      <h4>3. Testing Strategy</h4>
+      <p>Unit handler via <code>httptest.NewRecorder</code>; nota privada via mock Chatwoot.</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>go test ./internal/bridge/ -run 'WABWebhook|WindowClosed|PrivateNote' -race</code> — verde</li>
+        <li><code class="status">[]</code> <code>make test</code> — suíte cheia verde</li>
+      </ul>
+      <div class="loop">🔁 Todos boxes verdes antes da Fase 5.</div>
+    </div>
+
+    <!-- PHASE 5 -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 5: Onboarding (wizard + CLI)</h3>
+      <p>Criar tenant wablast com registro de webhook fail-closed. Sem pairing (megaAPI-only).</p>
+      <h4>1. tenant_build.go</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> RED: <code>BuildTenantInsert</code> provider=wablast encripta <code>wak_</code> + <code>whsec_</code>; não gera bearer megaAPI</li>
+        <li><code class="status">[]</code> GREEN: <code>TenantSpec</code>+branch por provider</li>
+      </ul>
+      <h4>2. wizard.go + wizard.html</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> seletor radio provider; campos condicionais wablast (<code>wak_</code> key, <code>account_id</code>)</li>
+        <li><code class="status">[]</code> <b>fail-closed</b> (espelha <code>FetchCwHMAC</code>): registrar webhook→obter <code>whsec_</code>→se falhar 400 PT-BR; ordem: register→<code>InsertTenant</code>→<code>UpdateTenantWablastSecret</code></li>
+        <li><code class="status">[]</code> pré-check <code>GET /v1/webhooks</code> pela mesma URL (evita endpoint duplicado — create não é upsert)</li>
+        <li><code class="status">[]</code> pular redirect <code>/pair</code> quando wablast</li>
+        <li><code class="status">[]</code> add dep <code>RegisterWablastWebhook</code> em <code>Handler.deps</code></li>
+      </ul>
+      <h4>3. cmd/bridge/main.go</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> flags <code>--provider</code>(default megaapi), <code>--wablast-api-key</code>, <code>--wablast-account-id</code></li>
+        <li><code class="status">[]</code> wire dep <code>RegisterWablastWebhook</code>; env <code>WABLAST_BASE_URL</code> (default <code>https://api.wablastmessage.com</code>)</li>
+      </ul>
+      <h4>4. Testing Strategy</h4>
+      <p>Unit build+validação de form; contract do register via mock. Snapshot: N/A (form HTML trivial, sem render dinâmico complexo).</p>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>go test ./internal/bridge/... -run 'Wizard|TenantBuild|Provider'</code> — verde</li>
+        <li><code class="status">[]</code> <code>make lint test</code> — gate CI</li>
+      </ul>
+      <div class="loop">🔁 Fail-closed obrigatório: tenant sem <code>whsec_</code> nunca persiste.</div>
+    </div>
+
+    <!-- PHASE 6 -->
+    <div class="phase">
+      <h3><code class="status">[]</code> Phase 6: E2E ao vivo + docs</h3>
+      <p>Validação real (opt-in code-craftsman) + ADR + CLAUDE.md lessons.</p>
+      <h4>1. E2E decision (opt-in)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> perguntar ao user E2E (fluxo crítico WhatsApp↔Chatwoot) — default DEFERRED com issue</li>
+        <li><code class="status">[]</code> se sim: gravar ADR <code>docs/adr/e2e-NNNN-wablast.md</code></li>
+      </ul>
+      <h4>2. Live smoke (Docker rebuild obrigatório)</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> <code>docker compose up -d --build bridge</code> (evita binário stale — lição CLAUDE.md)</li>
+        <li><code class="status">[]</code> criar tenant wablast; <code>POST /v1/webhooks/{id}/test</code> → nota chega no Chatwoot</li>
+        <li><code class="status">[]</code> inbound real (texto+mídia) → conversa; outbound reply (texto+mídia 2-step)</li>
+        <li><code class="status">[]</code> reply fora 24h → nota privada + <code>failed</code>; tenant megaAPI antigo intacto</li>
+      </ul>
+      <h4>3. Docs</h4>
+      <ul class="checklist">
+        <li><code class="status">[]</code> ADR seam de provider (decisão interface na 2ª impl)</li>
+        <li><code class="status">[]</code> CLAUDE.md: nota provider por tenant + WaBlast Standard Webhooks</li>
+      </ul>
+      <div class="loop">🔁 Feature completa só após smoke verde e docs.</div>
+    </div>
+  </section>
+
+  <section id="validation">
+    <h2>Validation Commands</h2>
+    <ul class="checklist">
+      <li><code class="status">[]</code> <code>make lint</code> — go vet + golangci-lint zero violações</li>
+      <li><code class="status">[]</code> <code>make test</code> — unit inteira verde (megaAPI regressão-zero)</li>
+      <li><code class="status">[]</code> <code>make integration</code> — migração 0005 + round-trip tenant wablast/megaAPI</li>
+      <li><code class="status">[]</code> <code>go test -race -cover ./internal/bridge/</code> — novos arquivos ≥80%, sem data race</li>
+      <li><code class="status">[]</code> <code>go test ./internal/bridge/ -run 'Wablast|StandardWebhook|WABWebhook|WindowClosed'</code> — feature coberta</li>
+      <li><code class="status">[]</code> (opcional) <code>go-mutesting ./internal/bridge/wablast.go</code> — mutation ≥70% no core novo</li>
+      <li><code class="status">[]</code> <code>make build</code> — binário estático compila</li>
+    </ul>
+    <div class="loop">🔁 Plano incompleto até todos os boxes verdes. Impossível → marcar <code>[f]</code> e seguir.</div>
+  </section>
+
+  <section id="notes">
+    <h2>Notes</h2>
+
+    <h3>Trade-offs</h3>
+    <table>
+      <tr><th>Decisão</th><th>Razão</th><th>Rejeitado</th></tr>
+      <tr><td>Interface <code>Provider</code></td><td>2ª impl real existe → convention libera; isola gateway por arquivo</td><td>switch <code>tenant.Provider</code> espalhado em 4 arquivos</td></tr>
+      <tr><td>Colunas novas <code>wablast_*</code></td><td>auto-documenta; migração aditiva</td><td>overload de <code>megaapi_*</code> (confuso)</td></tr>
+      <tr><td>WINDOW_CLOSED → nota privada</td><td>MVP simples, agente entende</td><td>template automático (precisa mapa+UI de params)</td></tr>
+      <tr><td>1 provider por tenant</td><td>cobre caso real; slug decide</td><td>dual no mesmo tenant (roteamento complexo, sem caso)</td></tr>
+      <tr><td>Register webhook fail-closed</td><td><code>whsec_</code> retorna 1× só; inbound depende</td><td>best-effort (inbound silenciosamente quebrado)</td></tr>
+      <tr><td>megaProvider = wrapper</td><td>regressão-zero, churn mínimo</td><td>reescrever caminho megaAPI</td></tr>
+    </table>
+
+    <h3>Test matrix (code-craftsman)</h3>
+    <table>
+      <tr><th>Tipo</th><th>Ferramenta</th><th>Escopo</th><th>Alvo</th></tr>
+      <tr><td>Unit (RED-first)</td><td><code>go test</code> table-driven</td><td>VerifyStandardWebhook, ParseInbound, classifyWablast, phone-strip</td><td>≥80% novo</td></tr>
+      <tr><td>Contract</td><td><code>net/http/httptest</code></td><td>SendText/SendMedia/DownloadMedia/registerWebhook, nota privada Chatwoot</td><td>todos endpoints externos</td></tr>
+      <tr><td>Integration</td><td>testcontainers (existente)</td><td>migração 0005 + persistência tenant</td><td>2 providers</td></tr>
+      <tr><td>Snapshot</td><td>—</td><td>N/A (sem render UI complexo)</td><td>não</td></tr>
+      <tr><td>E2E</td><td>manual/Docker</td><td>WhatsApp↔Chatwoot ao vivo</td><td>opt-in (DEFERRED default)</td></tr>
+      <tr><td>Mutation</td><td>go-mutesting</td><td><code>wablast.go</code>, <code>crypto.go</code></td><td>≥70% (opcional)</td></tr>
+    </table>
+
+    <h3>Detalhe: telefone inbound</h3>
+    <p>Verificado no source WaBlast <code>packages/core/src/webhooks/mapper.ts:59</code> (<code>from: message.from</code>): <code>from</code> = wa_id cru Meta = <b>dígitos sem <code>+</code></b> (ex <code>5511999990000</code>), igual à saída de <code>waContactJID</code>. <code>cwCreateContact</code> (<code>"+"+jid</code>) fica correto. <code>ParseInbound</code> passa direto com strip defensivo de <code>+</code>. Sem <code>++</code> nem identifier divergente.</p>
+
+    <h3>Loop-prevention</h3>
+    <div class="callout ok">Assinar só <code>message.received</code> (ignorar <code>message.echoed</code>/status) = equivalente WaBlast do check <code>fromMe</code> do megaAPI. Sends do bridge não re-entram.</div>
+
+    <h3>Riscos / edge cases</h3>
+    <ul>
+      <li><b>Endpoint duplicado</b>: <code>POST /v1/webhooks</code> é create (não upsert). Re-rodar wizard cria 2º endpoint. Mitigar: pré-check <code>GET /v1/webhooks</code>. Impacto limitado (UNIQUE em <code>messages</code> dedup; órfão auto-desativa após 15 falhas).</li>
+      <li><b>Mídia inbound TTL</b>: Meta apaga ~7d → <code>410</code>. Bridge baixa on-demand no processInbound; delay grande de fila pode expirar → notRetriable + log.</li>
+      <li><b>HEIC/GIF</b>: <code>prepareMedia</code> (megaAPI) barra pré-envio; WaBlast confia no <code>422 META_ERROR</code> → notRetriable (aceitável MVP).</li>
+      <li><b>Colunas NOT NULL</b>: migração precisa relaxar <code>megaapi_*</code> ou inserir zero-values; validado na Fase 1 com tenant legado.</li>
+    </ul>
+
+    <h3>Fora de escopo (MVP)</h3>
+    <ul>
+      <li>Template automático ao fechar janela 24h (só nota agora).</li>
+      <li>Eventos WaBlast além de <code>message.received</code> (delivery/read/failed → CSAT/nota futuro).</li>
+      <li>Canal <code>whatsapp_cloud</code> nativo do Chatwoot (WaBlast é o gateway — não é o caminho).</li>
+      <li>megaAPI + WaBlast no MESMO tenant.</li>
+    </ul>
+
+    <h3>Dependências</h3>
+    <p>Nenhuma lib nova. Reusa <code>crypto/subtle</code>, <code>crypto/hmac</code>, <code>net/http/httptest</code>, <code>mime/multipart</code>. Env nova: <code>WABLAST_BASE_URL</code> (default prod).</p>
+
+    <figure><div class="imgph"><!-- NOTES_IMAGE: sequence diagram inbound message.received → verify sig → enqueue → Chatwoot. Deferred. --></div>
+    <figcaption>Sequência inbound WaBlast: verify Standard-Webhooks → enqueue → Chatwoot.</figcaption></figure>
+  </section>
+
+  <section id="amendments">
+    <h2>Amendments</h2>
+    <p class="sub">Append-only. Populado por Update Plan após 1ª execução.</p>
+  </section>
+
+</main>
+</body>
+</html>

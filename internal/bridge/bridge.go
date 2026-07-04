@@ -467,30 +467,29 @@ func (s *Server) processInbound(ctx context.Context, job Job) error {
 	if err != nil {
 		return err
 	}
-	p, err := parseWA(job.Payload)
+	msg, err := s.providerFor(tenant).ParseInbound(job.Payload)
 	if err != nil {
 		return notRetriable(err)
 	}
-	jid := waContactJID(p)
-	contactID, convID, err := s.resolveContact(ctx, tenant, jid, p.PushName)
+	contactID, convID, err := s.resolveContact(ctx, tenant, msg.ContactID, msg.Name)
 	if err != nil {
 		return err
 	}
 	if err := s.DB.UpsertContact(ctx, Contact{
-		TenantID: tenant.ID, WAJid: jid,
+		TenantID: tenant.ID, WAJid: msg.ContactID,
 		CWContactID: contactID, CWConversationID: convID,
 	}); err != nil {
 		return err
 	}
 	var atts []Attachment
-	if a, ok := waAttachment(p); ok {
-		atts = []Attachment{a}
+	if msg.Attachment != nil {
+		atts = []Attachment{*msg.Attachment}
 	}
-	content := waText(p)
+	content := msg.Text
 	if content == "" && len(atts) > 0 {
 		content = atts[0].Caption
 	}
-	return s.postChatwootMessage(ctx, tenant, convID, content, p.Key.ID, atts)
+	return s.postChatwootMessage(ctx, tenant, convID, content, msg.ExternalID, atts)
 }
 
 func (s *Server) processOutbound(ctx context.Context, job Job) error {
@@ -510,34 +509,62 @@ func (s *Server) processOutbound(ctx context.Context, job Job) error {
 	if jid == "" || (p.Content == "" && len(atts) == 0) {
 		return notRetriable(errors.New("missing recipient or content"))
 	}
+	prov := s.providerFor(tenant)
 	if len(atts) == 0 {
-		return s.sendMegaAPIText(ctx, tenant, jid, p.Content)
+		return s.relayOutbound(ctx, tenant, p.Conversation.ID, func() error {
+			return prov.SendText(ctx, tenant, jid, p.Content)
+		})
 	}
-	for i, a := range atts {
+	for i := range atts {
+		a := atts[i]
 		if i == 0 {
 			a.Caption = p.Content
 		} else {
 			a.Caption = ""
 		}
-		prepared, err := s.prepareMedia(ctx, a)
-		if err != nil {
-			return err
-		}
-		if err := s.sendMegaAPIMedia(ctx, tenant, jid, prepared); err != nil {
+		if err := s.relayOutbound(ctx, tenant, p.Conversation.ID, func() error {
+			return prov.SendMedia(ctx, tenant, jid, a)
+		}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+const windowClosedNote = "⚠️ Janela de 24h fechada — o cliente precisa enviar uma mensagem primeiro, ou use um template aprovado para reabrir a conversa."
+
+// relayOutbound runs one gateway send. If the WhatsApp 24h window is closed it
+// leaves the agent a private note and stops retrying (a template is required).
+func (s *Server) relayOutbound(ctx context.Context, t Tenant, convID int64, send func() error) error {
+	err := send()
+	if errors.Is(err, errWindowClosed) {
+		if noteErr := s.postChatwootPrivateNote(ctx, t, convID, windowClosedNote); noteErr != nil {
+			s.Log.Err(noteErr).Str("tenant_id", t.ID.String()).Msg("post window-closed note failed")
+		}
+		return notRetriable(err)
+	}
+	return err
+}
+
+func (s *Server) postChatwootPrivateNote(ctx context.Context, t Tenant, convID int64, text string) error {
+	url := fmt.Sprintf("%s/api/v1/accounts/%d/conversations/%d/messages",
+		strings.TrimRight(t.ChatwootURL, "/"), t.ChatwootAccountID, convID)
+	body := map[string]any{"content": text, "message_type": "outgoing", "private": true}
+	return s.cwDo(ctx, t, http.MethodPost, url, body, nil)
+}
+
 func (s *Server) tenantByID(ctx context.Context, id uuid.UUID) (Tenant, error) {
-	const q = `SELECT id, slug, megaapi_host, megaapi_instance, megaapi_token_enc,
+	const q = `SELECT id, slug, provider, COALESCE(megaapi_host,''),
+COALESCE(megaapi_instance,''), megaapi_token_enc,
 chatwoot_url, chatwoot_token_enc, chatwoot_account_id, chatwoot_inbox_id,
-hmac_secret_enc, webhook_bearer_enc FROM tenants WHERE id = $1`
+hmac_secret_enc, webhook_bearer_enc,
+wablast_api_key_enc, wablast_account_id, wablast_webhook_secret_enc
+FROM tenants WHERE id = $1`
 	var t Tenant
-	err := s.DB.Pool.QueryRow(ctx, q, id).Scan(&t.ID, &t.Slug, &t.MegaAPIHost,
+	err := s.DB.Pool.QueryRow(ctx, q, id).Scan(&t.ID, &t.Slug, &t.Provider, &t.MegaAPIHost,
 		&t.MegaAPIInstance, &t.MegaAPITokenEnc, &t.ChatwootURL, &t.ChatwootTokenEnc,
-		&t.ChatwootAccountID, &t.ChatwootInboxID, &t.HMACSecretEnc, &t.WebhookBearerEnc)
+		&t.ChatwootAccountID, &t.ChatwootInboxID, &t.HMACSecretEnc, &t.WebhookBearerEnc,
+		&t.WablastAPIKeyEnc, &t.WablastAccountID, &t.WablastWebhookSecretEnc)
 	return t, err
 }
 

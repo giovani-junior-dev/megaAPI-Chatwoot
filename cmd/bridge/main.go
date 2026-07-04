@@ -339,19 +339,25 @@ func cmdTenant(ctx context.Context, log zerolog.Logger, args []string) error {
 }
 
 type tenantFlags struct {
-	slug, megaHost, megaInstance, megaToken string
-	cwURL, cwToken                          string
-	cwAccount, cwInbox                      int64
-	skipReachCheck                          bool
+	slug, provider                            string
+	megaHost, megaInstance, megaToken         string
+	wablastKey, wablastAccount, wablastSecret string
+	cwURL, cwToken                            string
+	cwAccount, cwInbox                        int64
+	skipReachCheck                            bool
 }
 
 func parseTenantFlags(args []string) (tenantFlags, error) {
 	fs := flag.NewFlagSet("tenant add", flag.ContinueOnError)
 	var f tenantFlags
 	fs.StringVar(&f.slug, "slug", "", "tenant slug (lowercase, dashes)")
+	fs.StringVar(&f.provider, "provider", "megaapi", "provider: megaapi | wablast")
 	fs.StringVar(&f.megaHost, "megaapi-host", "", "megaAPI base URL")
 	fs.StringVar(&f.megaInstance, "megaapi-instance", "", "megaAPI instance ID")
 	fs.StringVar(&f.megaToken, "megaapi-token", "", "megaAPI bearer token")
+	fs.StringVar(&f.wablastKey, "wablast-api-key", "", "WaBlast API key (wak_...)")
+	fs.StringVar(&f.wablastAccount, "wablast-account-id", "", "WaBlast connection id (optional)")
+	fs.StringVar(&f.wablastSecret, "wablast-webhook-secret", "", "WaBlast webhook signing secret (whsec_...)")
 	fs.StringVar(&f.cwURL, "chatwoot-url", "", "Chatwoot base URL")
 	fs.StringVar(&f.cwToken, "chatwoot-token", "", "Chatwoot api_access_token")
 	fs.Int64Var(&f.cwAccount, "chatwoot-account", 0, "Chatwoot account id")
@@ -360,11 +366,23 @@ func parseTenantFlags(args []string) (tenantFlags, error) {
 	if err := fs.Parse(args); err != nil {
 		return f, err
 	}
-	if f.slug == "" || f.megaHost == "" || f.megaInstance == "" || f.megaToken == "" ||
-		f.cwURL == "" || f.cwToken == "" || f.cwAccount == 0 || f.cwInbox == 0 {
-		return f, errors.New("all --slug, --megaapi-*, --chatwoot-* flags are required")
+	return f, validateTenantFlags(f)
+}
+
+func validateTenantFlags(f tenantFlags) error {
+	if f.slug == "" || f.cwURL == "" || f.cwToken == "" || f.cwAccount == 0 || f.cwInbox == 0 {
+		return errors.New("--slug and all --chatwoot-* flags are required")
 	}
-	return f, nil
+	if f.provider == "wablast" {
+		if f.wablastKey == "" {
+			return errors.New("--wablast-api-key is required for --provider wablast")
+		}
+		return nil
+	}
+	if f.megaHost == "" || f.megaInstance == "" || f.megaToken == "" {
+		return errors.New("all --megaapi-* flags are required for --provider megaapi")
+	}
+	return nil
 }
 
 func cmdTenantAdd(ctx context.Context, log zerolog.Logger, args []string) error {
@@ -377,7 +395,7 @@ func cmdTenantAdd(ctx context.Context, log zerolog.Logger, args []string) error 
 		return err
 	}
 	if !f.skipReachCheck {
-		if err := reachAll(ctx, f.megaHost, f.cwURL); err != nil {
+		if err := reachForProvider(ctx, f); err != nil {
 			return err
 		}
 	}
@@ -411,47 +429,41 @@ func loadKeyAndDSN() ([]byte, string, error) {
 	return key, dsn, nil
 }
 
-func reachAll(ctx context.Context, mega, cw string) error {
-	if err := reachCheck(ctx, mega); err != nil {
-		return fmt.Errorf("megaapi-host unreachable: %w", err)
+func reachForProvider(ctx context.Context, f tenantFlags) error {
+	if f.provider != "wablast" {
+		if err := reachCheck(ctx, f.megaHost); err != nil {
+			return fmt.Errorf("megaapi-host unreachable: %w", err)
+		}
 	}
-	if err := reachCheck(ctx, cw); err != nil {
+	if err := reachCheck(ctx, f.cwURL); err != nil {
 		return fmt.Errorf("chatwoot-url unreachable: %w", err)
 	}
 	return nil
 }
 
 func buildTenantInsert(f tenantFlags, key []byte) (string, string, bridge.TenantInsert, error) {
-	bearer := base64.RawURLEncoding.EncodeToString(bridge.RandomBytes(32))
-	hmacSecret := base64.RawURLEncoding.EncodeToString(bridge.RandomBytes(32))
-	enc := func(s string) ([]byte, error) { return bridge.Encrypt([]byte(s), key) }
-	encMega, err := enc(f.megaToken)
-	if err != nil {
-		return "", "", bridge.TenantInsert{}, err
-	}
-	encCW, err := enc(f.cwToken)
-	if err != nil {
-		return "", "", bridge.TenantInsert{}, err
-	}
-	encBearer, err := enc(bearer)
-	if err != nil {
-		return "", "", bridge.TenantInsert{}, err
-	}
-	encHMAC, err := enc(hmacSecret)
-	if err != nil {
-		return "", "", bridge.TenantInsert{}, err
-	}
-	ti := bridge.TenantInsert{
+	bearer, hmacSecret, ti, err := bridge.BuildTenantInsert(key, bridge.TenantSpec{
 		Slug:              f.slug,
+		Provider:          f.provider,
 		MegaAPIHost:       f.megaHost,
 		MegaAPIInstance:   f.megaInstance,
-		MegaAPITokenEnc:   encMega,
+		MegaAPIToken:      f.megaToken,
+		WablastAPIKey:     f.wablastKey,
+		WablastAccountID:  f.wablastAccount,
 		ChatwootURL:       f.cwURL,
-		ChatwootTokenEnc:  encCW,
+		ChatwootToken:     f.cwToken,
 		ChatwootAccountID: f.cwAccount,
 		ChatwootInboxID:   f.cwInbox,
-		HMACSecretEnc:     encHMAC,
-		WebhookBearerEnc:  encBearer,
+	})
+	if err != nil {
+		return "", "", bridge.TenantInsert{}, err
+	}
+	if f.provider == "wablast" && f.wablastSecret != "" {
+		enc, encErr := bridge.Encrypt([]byte(f.wablastSecret), key)
+		if encErr != nil {
+			return "", "", bridge.TenantInsert{}, encErr
+		}
+		ti.WablastWebhookSecretEnc = enc
 	}
 	return bearer, hmacSecret, ti, nil
 }
